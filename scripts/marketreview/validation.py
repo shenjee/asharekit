@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Mapping
 
 from .errors import InvalidFieldValueError
@@ -50,6 +51,9 @@ _FLOAT_FIELDS = frozenset(
         "avg_stock_price",
     }
 )
+# 百分数两位对应小数四位：0.11% → 0.0011。
+_PERCENT_RATIO_FIELDS = frozenset({"median_change_pct"})
+_PERCENT_RATIO_QUANTUM = Decimal("0.0001")
 
 
 def normalize_trade_date(value: str | date) -> str:
@@ -71,6 +75,12 @@ def _is_finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def quantize_percent_ratio(value: float) -> float:
+    """把百分数比率收到四位小数。0.11% 存 0.0011，半分进位远离零。"""
+    quantized = Decimal(str(value)).quantize(_PERCENT_RATIO_QUANTUM, rounding=ROUND_HALF_UP)
+    return float(quantized)
+
+
 def validate_atomic_field(key: str, value: Any) -> Any:
     if key not in ATOMIC_FIELD_NAMES:
         raise InvalidFieldValueError(f"未知字段：{key}")
@@ -83,7 +93,10 @@ def validate_atomic_field(key: str, value: Any) -> Any:
     if key in _FLOAT_FIELDS:
         if not _is_finite_number(value):
             raise InvalidFieldValueError(f"{key} 必须为有限数值")
-        return float(value)
+        number = float(value)
+        if key in _PERCENT_RATIO_FIELDS:
+            return quantize_percent_ratio(number)
+        return number
     raise InvalidFieldValueError(f"未知字段：{key}")
 
 

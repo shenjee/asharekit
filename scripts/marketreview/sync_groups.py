@@ -15,6 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from .errors import MarketReviewError, RemoteStoreError
 from .schema import ATOMIC_FIELD_NAMES
+from .validation import quantize_percent_ratio
 from .write_gate import same_json_value
 
 SCHEMA_VERSION = 1
@@ -543,7 +544,10 @@ def _review_from_mapping(row: Mapping[str, Any]) -> dict[str, Any]:
         elif type(value) is bool or type(value) not in {int, float}:
             raise RemoteStoreError(f"复盘字段 {name} 不是数值。", code="INCOMPLETE_RESPONSE")
         else:
-            review[name] = float(value)
+            number = float(value)
+            if name == "median_change_pct":
+                number = quantize_percent_ratio(number)
+            review[name] = number
     review["created_at"] = row["created_at"]
     review["updated_at"] = row["updated_at"]
     return review
