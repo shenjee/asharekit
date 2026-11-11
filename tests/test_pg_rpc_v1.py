@@ -32,6 +32,7 @@ MIGRATIONS = [
     ROOT / "sql" / "migrations" / "0001_marketreview_v1.sql",
     ROOT / "sql" / "migrations" / "0002_marketreview_v1_rpc.sql",
     ROOT / "sql" / "migrations" / "0003_marketreview_v1_sync.sql",
+    ROOT / "sql" / "migrations" / "0005_median_change_pct_scale.sql",
 ]
 CONTAINER = "dmr-pg-rpc-v1"
 DATABASE = "marketreview_v1_test"
@@ -437,6 +438,18 @@ class PostgresRpcTest(unittest.TestCase):
         self.assertIsNone(review["pullback_count"])
         self.assertEqual(review["median_change_pct"], 1.5)
         self.assertEqual(review["declining_count"], 3)
+        rounded = self._rpc(
+            "marketreview_save_review",
+            {
+                "schema_version": 1,
+                "trade_date": "2026-08-21",
+                "batch_time": BATCH_2,
+                "fields": {"median_change_pct": -0.00205},
+            },
+        )
+        self.assertEqual(rounded["revision"], 3)
+        review = self._snapshot()["reviews"][0]
+        self.assertEqual(review["median_change_pct"], -0.0021)
         self.assertEqual(review["created_at"], BATCH)
         self.assertEqual(review["updated_at"], BATCH_2)
         self.assertEqual(set(ATOMIC_FIELD_NAMES) - set(review), set())

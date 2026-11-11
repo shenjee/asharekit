@@ -725,6 +725,22 @@ class TestSyncPush(SyncCase):
         self.assertIs(type(cloud["review"]["pe_sh"]), int)
         self.assertTrue(same_evidence([local], [cloud]))
 
+    def test_push_quantizes_raw_median_change_pct(self) -> None:
+        self.seed_review()
+        conn = connect(self.db)
+        try:
+            conn.execute(
+                "UPDATE daily_market_review SET median_change_pct = ? WHERE trade_date = ?",
+                (0.01165, DAY),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        report = self.push()
+        self.assertEqual(report["status"], "completed")
+        stored = self.cloud.groups["review:" + DAY]["review"]["median_change_pct"]
+        self.assertEqual(stored, 0.0117)
+
 
 class TestSyncPull(SyncCase):
     def test_cloud_ahead_downloads_and_local_only_blocks(self) -> None:

@@ -1,6 +1,6 @@
 # Daily Market Review
 
-当前版本：**0.4.2**。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
+当前版本：**0.4.3**。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
 
 ## 功能
 
@@ -42,7 +42,7 @@
 
 如果 Agent 不支持自动安装，或你希望自行管理安装位置，可以手动安装：
 
-1. 打开项目的 [Releases 页面](https://github.com/shenjee/daily-market-review/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.4.2.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
+1. 打开项目的 [Releases 页面](https://github.com/shenjee/daily-market-review/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.4.3.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
 2. 解压，得到 `daily-market-review` 目录。
 3. 将该目录放入所使用 Agent 的 Skill 目录。
 
@@ -114,7 +114,7 @@ chmod 600 ~/.marketreview/supabase.secret
 
 ### 云端初始化
 
-安装客户端、复制配置模板和填写凭证都不会自动部署云端数据库。新项目须由有数据库管理权限的维护者，使用管理连接或 SQL 编辑器，按文件编号依次执行发布包 `sql/migrations/` 中的 `0001`、`0002`、`0003`、`0004` 迁移；已有项目先核对已部署迁移，仅应用缺失部分。迁移包含表、函数、RPC wrappers 和服务端超时设置，不能只建表。现有项目迁移前先做云端备份。
+安装客户端、复制配置模板和填写凭证都不会自动部署云端数据库。新项目须由有数据库管理权限的维护者，使用管理连接或 SQL 编辑器，按文件编号依次执行发布包 `sql/migrations/` 中的 `0001`、`0002`、`0003`、`0004`、`0005` 迁移；已有项目先核对已部署迁移，仅应用缺失部分。迁移包含表、函数、RPC wrappers 和服务端超时设置，不能只建表。现有项目迁移前先做云端备份。
 
 部署完成后，用下方显式 Supabase 的 `get` 命令检查读取是否成功。缺表 / 函数 / RPC 时应核对项目和迁移部署，不要反复更换密钥。一次读取成功只是连通性检查，不能代替迁移完整性与备份恢复核验。
 

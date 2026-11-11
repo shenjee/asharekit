@@ -69,6 +69,26 @@ class TestMarketReviewRepository(unittest.TestCase):
             saved = actual[(event["market"], event["code"], event["direction"])]
             self.assertEqual(asdict(saved), {"trade_date": self.fixture["trade_date"], **event})
 
+    def test_save_review_quantizes_median_change_pct_to_four_decimals(self) -> None:
+        self.repo.save_review(
+            "2026-08-21",
+            fields={"median_change_pct": -0.00198071560768595},
+        )
+        review = self.repo.get_review("2026-08-21")
+        self.assertEqual(review.median_change_pct, -0.002)
+
+        self.repo.save_review("2026-08-21", fields={"median_change_pct": 0.0011})
+        review = self.repo.get_review("2026-08-21")
+        self.assertEqual(review.median_change_pct, 0.0011)
+
+        self.repo.save_review("2026-08-21", fields={"median_change_pct": 0.01165})
+        review = self.repo.get_review("2026-08-21")
+        self.assertEqual(review.median_change_pct, 0.0117)
+
+        self.repo.save_review("2026-08-21", fields={"median_change_pct": -0.00205})
+        review = self.repo.get_review("2026-08-21")
+        self.assertEqual(review.median_change_pct, -0.0021)
+
     def test_save_review_rejects_bool_for_integer_field(self) -> None:
         with self.assertRaises(InvalidFieldValueError):
             self.repo.save_review("2026-08-21", fields={"advancing_count": True})
