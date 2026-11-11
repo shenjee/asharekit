@@ -35,7 +35,7 @@ DECLARE
   int_fields text[] := ARRAY['advancing_count', 'declining_count', 'pullback_count'];
   float_fields text[] := ARRAY[
     'avg_stock_price', 'cy_index_close', 'cy_index_prev_close', 'float_market_cap',
-    'margin_balance_bj', 'margin_balance_sh', 'margin_balance_sz', 'median_change_pct',
+    'margin_balance_bj', 'margin_balance_sh', 'margin_balance_sz',
     'pe_all', 'pe_cy', 'pe_sh', 'pe_sz', 'sh_index_close', 'sh_index_prev_close',
     'sz_index_close', 'sz_index_prev_close', 'total_market_cap',
     'turnover_amount_bj', 'turnover_amount_cy', 'turnover_amount_sh', 'turnover_amount_sz'
