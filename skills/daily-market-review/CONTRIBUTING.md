@@ -1,6 +1,10 @@
 # 开发指南
 
-本文档面向参与 Daily Market Review 开发和调试的贡献者，不是最终用户安装说明。
+本文档面向参与 `daily-market-review` 开发和调试的贡献者，不是最终用户安装说明。
+
+本 skill 在 asharekit 源码仓库中的路径是 `skills/daily-market-review/`。当前 GitHub 仓库名仍是 `daily-market-review`。
+
+Agent 加载的 skill 只来自 GitHub Release 的版本包。开发时不要把源码目录软链接或复制到 Agent 的 skill 目录。改完代码并发布之后，再单独安装新的版本包。
 
 开发前请阅读：
 
@@ -19,17 +23,11 @@ git clone https://github.com/shenjee/daily-market-review.git
 cd daily-market-review
 ```
 
-开发期间如需让 Agent 直接加载当前工作副本，可以将仓库软链接到相应 Agent 的 Skill 目录。该方式仅用于本地开发，不应作为发布版本的安装方式。
-
-以 Codex 为例：
-
-```bash
-ln -s "$(pwd)" ~/.codex/skills/daily-market-review
-```
+克隆下来的目录只用于开发和打包。它和 Agent 的 skill 目录没有关联。
 
 ## CLI 调试
 
-`--db` 必须放在子命令之前，并且不能单独把后端改成 SQLite。调试本地库时同时写上 `--backend sqlite`，并用临时文件，避免改到真实用户数据：
+以下命令在 `skills/daily-market-review/` 下执行。`--db` 必须放在子命令之前，并且不能单独把后端改成 SQLite。调试本地库时同时写上 `--backend sqlite`，并用临时文件，避免改到真实用户数据：
 
 ```bash
 python3 scripts/cli.py --backend sqlite --db /tmp/marketreview-test.sqlite3 get --date 2026-08-21
@@ -51,15 +49,17 @@ EOF
 
 ## 测试
 
+在仓库根目录执行：
+
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest discover -s skills/daily-market-review/tests -p 'test_*.py'
 ```
 
-GitHub Actions（`.github/workflows/tests.yml`）跑同一条命令。流水线自建隔离 PostgreSQL，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
+GitHub Actions（仓库根目录 `.github/workflows/tests.yml`）跑同一条命令。流水线自建隔离 PostgreSQL，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
 
 ## 发布包内容
 
-最终用户版本包命名为 `daily-market-review-vX.Y.Z.zip`，解压后根目录为 `daily-market-review/`，应只包含运行所需内容（当前版本 0.4.3）：
+从 `skills/daily-market-review/` 打包。最终用户版本包命名为 `daily-market-review-vX.Y.Z.zip`，解压后根目录为 `daily-market-review/`，应只包含运行所需内容（当前版本 0.4.3）：
 
 ```text
 daily-market-review/
@@ -80,7 +80,7 @@ daily-market-review/
 
 `config/` 只放未填写的示例模板，供用户复制到 `~/.marketreview/` 后自行填写。`contracts/` 与 `sql/migrations/` 是备份 / 恢复 / 核验工具的运行依赖（函数合同与迁移副本），必须打进版本包。不要把 `.git/`、`tests/`、`__pycache__/`、本地数据库、已填写的凭证、编辑器配置或其他开发产物放入版本包。
 
-README 的开发指南使用源码仓库绝对链接；`CONTRIBUTING.md` 和开发文档不在运行包内，不能从包内 README 相对链接到这些文件。
+版本包里的 `README.md` 只说明安装和日常使用，不链接源码仓库，也不链接 `CONTRIBUTING.md`。`CONTRIBUTING.md` 和开发文档不打进版本包。
 
 ## 发布检查清单
 

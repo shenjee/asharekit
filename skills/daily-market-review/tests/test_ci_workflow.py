@@ -5,14 +5,17 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "tests.yml"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "tests.yml"
 
 
 class CiWorkflowTest(unittest.TestCase):
     def test_workflow_uses_isolated_postgres_and_no_secrets(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("python3 -m unittest discover -s tests -p 'test_*.py'", text)
+        self.assertIn(
+            "python3 -m unittest discover -s skills/daily-market-review/tests -p 'test_*.py'",
+            text,
+        )
         self.assertIn("MARKETREVIEW_PGPORT=55432", text)
         self.assertIn("--auth=trust", text)
         self.assertIn("permissions:", text)

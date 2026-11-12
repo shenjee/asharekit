@@ -2,7 +2,7 @@
 
 - 文档类型：产品需求
 - Skill 名称：`daily-market-review`
-- 所属项目：daily-market-review
+- 所属项目：asharekit
 - 当前版本：0.4.3
 
 ## 1. 文档目的与产品定义
