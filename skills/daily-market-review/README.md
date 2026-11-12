@@ -25,7 +25,7 @@
 
 只安装 GitHub Release 上的版本包。不要克隆源码仓库，也不要把源码目录放进 Agent 的 skill 目录。安装完成后不需要保存源码仓库。
 
-本 skill 属于 asharekit。版本包发布在 [shenjee/daily-market-review 的 Releases](https://github.com/shenjee/daily-market-review/releases)。
+本 skill 属于 asharekit。版本包发布在 [shenjee/asharekit 的 Releases](https://github.com/shenjee/asharekit/releases)。
 
 不同 Agent 需要分别安装一份 Skill。云端模式是否共享取决于是否连接同一 Supabase 项目，与 `MARKETREVIEW_HOME` 无关；正式与测试账本应连接不同项目。本地 SQLite 模式只有解析到同一数据库文件时才共享；`MARKETREVIEW_HOME` 改变本地目录，`--db` 可覆盖该路径。
 
@@ -33,14 +33,14 @@
 
 把 Release 里的版本包交给 Agent，或让它从 Releases 下载后再安装。例如：
 
-- 「请从 https://github.com/shenjee/daily-market-review/releases 安装最新的 daily-market-review 版本包，不要克隆源码仓库。」
+- 「请从 https://github.com/shenjee/asharekit/releases 安装最新的 daily-market-review 版本包，不要克隆源码仓库。」
 - 「帮我安装 daily-market-review 市场复盘 Skill 的发布包」
 
 安装完成后，先完成下文「云端配置模板」和「云端初始化」，或明确配置 `backend=sqlite` 使用本地模式，再开始使用。
 
 ### 手动安装
 
-1. 打开项目的 [Releases 页面](https://github.com/shenjee/daily-market-review/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.4.3.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
+1. 打开项目的 [Releases 页面](https://github.com/shenjee/asharekit/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.4.3.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
 2. 解压，得到 `daily-market-review` 目录。
 3. 将该目录放入所使用 Agent 的 Skill 目录。
 

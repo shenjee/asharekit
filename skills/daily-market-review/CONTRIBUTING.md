@@ -2,7 +2,7 @@
 
 本文档面向参与 `daily-market-review` 开发和调试的贡献者，不是最终用户安装说明。
 
-本 skill 在 asharekit 源码仓库中的路径是 `skills/daily-market-review/`。当前 GitHub 仓库名仍是 `daily-market-review`。
+本 skill 在 asharekit 源码仓库中的路径是 `skills/daily-market-review/`。
 
 Agent 加载的 skill 只来自 GitHub Release 的版本包。开发时不要把源码目录软链接或复制到 Agent 的 skill 目录。改完代码并发布之后，再单独安装新的版本包。
 
@@ -19,8 +19,8 @@ Agent 加载的 skill 只来自 GitHub Release 的版本包。开发时不要把
 ## 获取源码
 
 ```bash
-git clone https://github.com/shenjee/daily-market-review.git
-cd daily-market-review
+git clone https://github.com/shenjee/asharekit.git
+cd asharekit
 ```
 
 克隆下来的目录只用于开发和打包。它和 Agent 的 skill 目录没有关联。

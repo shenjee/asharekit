@@ -2,7 +2,7 @@
 
 A 股市场 skill 集。当前有两个互相独立的 skill：一个记录收盘后的市场复盘，一个从已保存的连板里选股。
 
-集合名是 **asharekit**。GitHub 仓库当前仍是 [shenjee/daily-market-review](https://github.com/shenjee/daily-market-review)，改名另做。这个仓库只用于开发和打包。Agent 加载的 skill 只来自 GitHub Release 的版本包，不来自本仓库的任何目录。
+仓库是 [shenjee/asharekit](https://github.com/shenjee/asharekit)。这个仓库只用于开发和打包。Agent 加载的 skill 只来自 GitHub Release 的版本包，不来自本仓库的任何目录。
 
 ## 目录
 
@@ -35,7 +35,7 @@ asharekit/
 
 ### daily-market-review
 
-当前发布版本是 **0.4.3**。从 [Releases](https://github.com/shenjee/daily-market-review/releases) 下载 `daily-market-review-vX.Y.Z.zip`。安装步骤、云端配置和升级说明在版本包内的 README；源码里的同一份见 [skills/daily-market-review/README.md](skills/daily-market-review/README.md)。
+当前发布版本是 **0.4.3**。从 [Releases](https://github.com/shenjee/asharekit/releases) 下载 `daily-market-review-vX.Y.Z.zip`。安装步骤、云端配置和升级说明在版本包内的 README；源码里的同一份见 [skills/daily-market-review/README.md](skills/daily-market-review/README.md)。
 
 ### streak-picker
 
