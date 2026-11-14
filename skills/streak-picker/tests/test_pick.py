@@ -126,6 +126,10 @@ class EmptyResultTest(unittest.TestCase):
         result = pick({"review": {"turnover_amount_sh": 1}, "events": [], "ladder": {"groups": []}})
         self.assertEqual(result["status"], "no_closed_limit_up")
 
+    def test_null_events_behaves_like_empty_events(self) -> None:
+        result = pick({"review": None, "events": None, "ladder": {"groups": []}})
+        self.assertEqual(result["status"], "no_record")
+
 
 class TieBreakTest(unittest.TestCase):
     def test_equal_business_keys_use_market_then_code(self) -> None:
@@ -161,6 +165,8 @@ class TieBreakTest(unittest.TestCase):
         intraday = result["leaders"]["intraday"][0]
         self.assertTrue(intraday["undetermined"])
         self.assertIsNone(intraday["code"])
+        self.assertIsNone(intraday["streak_height"])
+        self.assertEqual(intraday["tied"], [])
         self.assertEqual(intraday["basis"], "数据缺失，无法判定")
         self.assertEqual(result["leaders"]["market"]["code"], "600000")
 
@@ -208,6 +214,25 @@ class TieBreakTest(unittest.TestCase):
         )
         counts = {item["theme"]: item["limit_up_count"] for item in result["strong_sectors"]}
         self.assertEqual(counts, {"机器人": 2, "算力": 1})
+
+    def test_sector_seal_sum_uses_present_values_only(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", limit_up_reasons=["部分缺"], first_limit_time="09:30:00", seal_amount=100_000_000),
+                    _stock(code="600002", limit_up_reasons=["部分缺"], first_limit_time="10:00:00", seal_amount=None),
+                    _stock(code="600003", limit_up_reasons=["全部有"], first_limit_time="09:30:00", seal_amount=90_000_000),
+                    _stock(code="600004", limit_up_reasons=["全部有"], first_limit_time="10:00:00", seal_amount=90_000_000),
+                ]
+            )
+        )
+        sectors = {item["theme"]: item for item in result["strong_sectors"]}
+        self.assertEqual(sectors["部分缺"]["seal_amount_sum"], 100_000_000)
+        self.assertEqual(sectors["全部有"]["seal_amount_sum"], 180_000_000)
+
+    def test_invalid_reasons_type_is_an_error(self) -> None:
+        with self.assertRaises(PickError):
+            pick(_data([_stock(limit_up_reasons=0)]))
 
 
 class RowBoundaryTest(unittest.TestCase):
@@ -260,12 +285,33 @@ class MissingRowDataTest(unittest.TestCase):
         self.assertEqual(result["status"], "unclassifiable_rows")
         self.assertEqual(
             result["message"],
-            "首板和二板的收盘价、个股流通市值或涨停限幅均未保存，无法分排",
+            "首板和二板的收盘价、个股流通市值未保存，共2只，无法分排",
         )
         self.assertEqual(result["row1"], [])
         self.assertEqual(result["row2"], [])
         self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600002", "600001"])
         self.assertEqual(result["leaders"]["market"]["code"], "600003")
+
+    def test_unclassifiable_message_names_only_the_missing_fields(self) -> None:
+        result = pick(_data([_stock(stock_float_market_cap=None)]))
+        self.assertEqual(result["status"], "unclassifiable_rows")
+        self.assertEqual(result["message"], "首板和二板的个股流通市值未保存，共1只，无法分排")
+
+    def test_pool_without_first_or_second_boards_is_reported(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="三板", streak_height=3, close_price=None, stock_float_market_cap=None),
+                    _stock(code="600002", name="四板", streak_height=4, close_price=None, stock_float_market_cap=None),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "no_row_candidates")
+        self.assertEqual(result["message"], "候选池内没有首板或二板")
+        self.assertEqual(result["row1"], [])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual(result["unclassified_rows"], [])
+        self.assertEqual(result["leaders"]["market"]["code"], "600002")
 
     def test_some_missing_rows_are_listed_next_to_classified_rows(self) -> None:
         result = pick(
@@ -295,6 +341,31 @@ class CliTest(unittest.TestCase):
         output = json.loads(buffer.getvalue())
         self.assertTrue(output["ok"])
         self.assertEqual(output["data"]["leaders"]["market"]["code"], "600001")
+
+    def test_pick_reads_input_file(self) -> None:
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        ) as handle:
+            handle.write(FIXTURE.read_text(encoding="utf-8"))
+            path = handle.name
+        buffer = io.StringIO()
+        with mock.patch("sys.stdout", buffer):
+            code = cli.main(["pick", "--input", path])
+        self.assertEqual(code, 0)
+        output = json.loads(buffer.getvalue())
+        self.assertTrue(output["ok"])
+        self.assertEqual(output["data"]["leaders"]["market"]["code"], "600001")
+
+    def test_missing_input_file_is_a_clean_error(self) -> None:
+        buffer = io.StringIO()
+        with mock.patch("sys.stdout", buffer):
+            code = cli.main(["pick", "--input", "/nonexistent/get.json"])
+        self.assertEqual(code, 1)
+        output = json.loads(buffer.getvalue())
+        self.assertFalse(output["ok"])
+        self.assertEqual(output["error"]["code"], "PICK_FAILED")
 
     def test_failed_get_is_rejected(self) -> None:
         payload = {"ok": False, "data": None, "error": {"code": "REMOTE_UNAVAILABLE", "message": "超时"}}

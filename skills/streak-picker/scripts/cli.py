@@ -39,6 +39,9 @@ def cmd_pick(args: argparse.Namespace) -> int:
     except json.JSONDecodeError:
         _failure("pick 输入不是合法 JSON")
         return 1
+    except OSError as exc:
+        _failure(f"pick 输入读取失败：{exc.strerror or exc}")
+        return 1
     return 0
 
 

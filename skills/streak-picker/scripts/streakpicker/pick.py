@@ -16,12 +16,20 @@ STRONG_SECTOR_LIMIT = 3
 STATUS_OK = "ok"
 STATUS_NO_RECORD = "no_record"
 STATUS_NO_CLOSED_LIMIT_UP = "no_closed_limit_up"
+STATUS_NO_ROW_CANDIDATES = "no_row_candidates"
 STATUS_UNCLASSIFIABLE_ROWS = "unclassifiable_rows"
 
 MESSAGE_NO_RECORD = "库内无记录"
 MESSAGE_NO_CLOSED_LIMIT_UP = "库内无收盘涨停事件"
 MESSAGE_INTRADAY_UNDETERMINED = "数据缺失，无法判定"
-MESSAGE_UNCLASSIFIABLE_ROWS = "首板和二板的收盘价、个股流通市值或涨停限幅均未保存，无法分排"
+MESSAGE_NO_ROW_CANDIDATES = "候选池内没有首板或二板"
+
+ROW_FIELDS = ("close_price", "stock_float_market_cap", "limit_rate_bp")
+FIELD_LABELS = {
+    "close_price": "收盘价",
+    "stock_float_market_cap": "个股流通市值",
+    "limit_rate_bp": "涨停限幅",
+}
 
 
 class PickError(ValueError):
@@ -59,9 +67,12 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
     has_classified_rows = bool(row1 or row2)
     status = STATUS_OK
     message = None
-    if not has_classified_rows and unclassified:
+    if not any(item["streak_height"] in (1, 2) for item in stocks):
+        status = STATUS_NO_ROW_CANDIDATES
+        message = MESSAGE_NO_ROW_CANDIDATES
+    elif not has_classified_rows and unclassified:
         status = STATUS_UNCLASSIFIABLE_ROWS
-        message = MESSAGE_UNCLASSIFIABLE_ROWS
+        message = _unclassifiable_message(unclassified)
     return {
         "status": status,
         "message": message,
@@ -138,9 +149,10 @@ def _normalize_stock(raw: Any) -> dict[str, Any]:
     name = raw.get("name")
     if not isinstance(name, str) or not name:
         raise PickError(f"{market} {code} 缺少 name")
-    reasons = raw.get("limit_up_reasons") or []
+    reasons_raw = raw.get("limit_up_reasons")
+    reasons = [] if reasons_raw is None else reasons_raw
     if not isinstance(reasons, list) or any(not isinstance(item, str) for item in reasons):
-        raise PickError(f"{market} {code} 的 limit_up_reasons 必须是字符串数组")
+        raise PickError(f"{market} {code} 的 limit_up_reasons 必须是字符串数组或 null")
     streak = _integer(raw.get("streak_height"), f"{market} {code} 的 streak_height")
     if streak is None:
         raise PickError(f"{market} {code} 缺少 streak_height")
@@ -306,6 +318,11 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
             "market": None,
             "code": None,
             "name": None,
+            "streak_height": None,
+            "first_limit_time": None,
+            "seal_ratio": None,
+            "seal_amount": None,
+            "tied": [],
             "basis": MESSAGE_INTRADAY_UNDETERMINED,
         }
     ordered = sorted(timed, key=_leader_sort_key)
@@ -314,6 +331,16 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
     row = _leader_row("日内龙头", theme, winner, tied)
     row["basis"] = _leader_basis(winner, tied).replace("同高度还有", "同一涨停时间还有", 1)
     return row
+
+
+def _unclassifiable_message(unclassified: list[dict[str, Any]]) -> str:
+    missing = [
+        field
+        for field in ROW_FIELDS
+        if any(field in item["missing_fields"] for item in unclassified)
+    ]
+    labels = "、".join(FIELD_LABELS[field] for field in missing)
+    return f"首板和二板的{labels}未保存，共{len(unclassified)}只，无法分排"
 
 
 def _row1(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -396,8 +423,7 @@ def _candidate_basis(stock: dict[str, Any], missing: list[str], unmet: list[str]
         return f"{facts}，三项都确认满足"
     notes: list[str] = []
     if missing:
-        labels = {"close_price": "收盘价", "stock_float_market_cap": "个股流通市值", "limit_rate_bp": "涨停限幅"}
-        notes.append("数据缺失：" + "、".join(labels[item] for item in missing))
+        notes.append("数据缺失：" + "、".join(FIELD_LABELS[item] for item in missing))
     if unmet:
         notes.append("未满足：" + "、".join(unmet))
     return f"{facts}；" + "；".join(notes)
