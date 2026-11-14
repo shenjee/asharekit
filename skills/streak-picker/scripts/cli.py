@@ -24,8 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "pick":
         return cmd_pick(args)
-    parser.error(f"未知命令：{args.command}")
-    return 2
+    raise AssertionError(f"未处理的子命令：{args.command}")
 
 
 def cmd_pick(args: argparse.Namespace) -> int:

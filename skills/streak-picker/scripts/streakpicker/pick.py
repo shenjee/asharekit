@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 ONE_HUNDRED_MILLION = 100_000_000
@@ -126,16 +127,17 @@ def _pool(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
             raise PickError("ladder.groups 的每一组都必须包含 stocks 数组")
         for raw in group["stocks"]:
             stock = _normalize_stock(raw)
-            identity = (stock["market"], stock["code"])
-            if identity in seen:
-                raise PickError(f"候选池有重复股票：{stock['market']} {stock['code']}")
-            seen.add(identity)
-            if (
+            if not (
                 stock["direction"] == "up"
                 and stock["closed_at_limit"] is True
                 and stock["streak_height"] >= 1
             ):
-                stocks.append(stock)
+                continue
+            identity = (stock["market"], stock["code"])
+            if identity in seen:
+                raise PickError(f"候选池有重复股票：{stock['market']} {stock['code']}")
+            seen.add(identity)
+            stocks.append(stock)
     return stocks
 
 
@@ -190,7 +192,10 @@ def _number(value: Any, label: str) -> float | None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise PickError(f"{label} 必须是数值或 null")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise PickError(f"{label} 必须是有限数值")
+    return number
 
 
 def _text_or_none(value: Any, label: str) -> str | None:
@@ -277,6 +282,8 @@ def _leader_row(
     theme: str | None,
     winner: dict[str, Any],
     tied: list[dict[str, Any]],
+    *,
+    tied_label: str = "同高度还有",
 ) -> dict[str, Any]:
     row = _stock_ref(winner)
     row.update(
@@ -289,13 +296,18 @@ def _leader_row(
             "seal_ratio": winner["seal_ratio"],
             "seal_amount": winner["seal_amount"],
             "tied": [_stock_ref(item) | {"streak_height": item["streak_height"]} for item in tied],
-            "basis": _leader_basis(winner, tied),
+            "basis": _leader_basis(winner, tied, tied_label=tied_label),
         }
     )
     return row
 
 
-def _leader_basis(winner: dict[str, Any], tied: list[dict[str, Any]]) -> str:
+def _leader_basis(
+    winner: dict[str, Any],
+    tied: list[dict[str, Any]],
+    *,
+    tied_label: str = "同高度还有",
+) -> str:
     parts = [
         f"{winner['streak_height']}板",
         f"首次涨停{_or_missing(winner['first_limit_time'])}",
@@ -316,7 +328,7 @@ def _leader_basis(winner: dict[str, Any], tied: list[dict[str, Any]]) -> str:
             f"{winner['streak_height']}板，首次涨停时间、封成比、封单额均缺失；"
             f"按 market/code 顺序展示，其余同高度股票为 {others}"
         )
-    parts.append(f"同高度还有 {others}，按首次涨停时间、封成比、封单额、market、code 取本只")
+    parts.append(f"{tied_label} {others}，按首次涨停时间、封成比、封单额、market、code 取本只")
     return "，".join(parts)
 
 
@@ -340,9 +352,7 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
     ordered = sorted(timed, key=_leader_sort_key)
     winner = ordered[0]
     tied = [item for item in ordered[1:] if item["first_limit_time"] == winner["first_limit_time"]]
-    row = _leader_row("日内龙头", theme, winner, tied)
-    row["basis"] = _leader_basis(winner, tied).replace("同高度还有", "同一涨停时间还有", 1)
-    return row
+    return _leader_row("日内龙头", theme, winner, tied, tied_label="同一涨停时间还有")
 
 
 def _unclassifiable_message(unclassified: list[dict[str, Any]]) -> str:

@@ -187,7 +187,10 @@ class TieBreakTest(unittest.TestCase):
                 ]
             )
         )
-        self.assertEqual(result["leaders"]["intraday"][0]["code"], "600002")
+        intraday = result["leaders"]["intraday"][0]
+        self.assertEqual(intraday["code"], "600002")
+        self.assertIn("同一涨停时间还有 sh 600001 封成比低", intraday["basis"])
+        self.assertNotIn("同高度还有", intraday["basis"])
 
     def test_intraday_leader_stays_undetermined_when_every_time_is_missing(self) -> None:
         result = pick(_data([_stock(first_limit_time=None), _stock(code="600001", first_limit_time=None)]))
@@ -262,6 +265,14 @@ class TieBreakTest(unittest.TestCase):
     def test_invalid_reasons_type_is_an_error(self) -> None:
         with self.assertRaises(PickError):
             pick(_data([_stock(limit_up_reasons=0)]))
+
+    def test_non_finite_numbers_are_rejected(self) -> None:
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=bad):
+                with self.assertRaises(PickError):
+                    pick(_data([_stock(seal_ratio=bad)]))
+        with self.assertRaises(PickError):
+            pick(_data([_stock(seal_amount=float("inf"))]))
 
 
 class RowBoundaryTest(unittest.TestCase):
@@ -407,9 +418,54 @@ class CliTest(unittest.TestCase):
         self.assertFalse(output["ok"])
         self.assertIn("REMOTE_UNAVAILABLE", output["error"]["message"])
 
+    def test_invalid_json_is_a_clean_error(self) -> None:
+        buffer = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("{not json")):
+            with mock.patch("sys.stdout", buffer):
+                code = cli.main(["pick", "--input", "-"])
+        self.assertEqual(code, 1)
+        output = json.loads(buffer.getvalue())
+        self.assertFalse(output["ok"])
+        self.assertEqual(output["error"]["code"], "PICK_FAILED")
+        self.assertIn("不是合法 JSON", output["error"]["message"])
+
+    def test_empty_input_is_a_clean_error(self) -> None:
+        buffer = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("  \n")):
+            with mock.patch("sys.stdout", buffer):
+                code = cli.main(["pick", "--input", "-"])
+        self.assertEqual(code, 1)
+        output = json.loads(buffer.getvalue())
+        self.assertFalse(output["ok"])
+        self.assertIn("pick 输入为空", output["error"]["message"])
+
+    def test_successful_get_without_data_is_a_clean_error(self) -> None:
+        payload = {"ok": True, "data": None, "error": None}
+        buffer = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO(json.dumps(payload))):
+            with mock.patch("sys.stdout", buffer):
+                code = cli.main(["pick", "--input", "-"])
+        self.assertEqual(code, 1)
+        output = json.loads(buffer.getvalue())
+        self.assertFalse(output["ok"])
+        self.assertIn("缺少 data 对象", output["error"]["message"])
+
     def test_duplicate_stock_is_an_error(self) -> None:
         with self.assertRaises(PickError):
             pick(_data([_stock(), _stock()]))
+
+    def test_duplicate_non_candidate_is_ignored(self) -> None:
+        # 同一代码的非候选（未封板）不触发重复检查，也不进候选池
+        result = pick(
+            _data(
+                [
+                    _stock(),
+                    _stock(closed_at_limit=False),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual([item["code"] for item in result["row1"]], ["600000"])
 
 
 class SkillTextTest(unittest.TestCase):
