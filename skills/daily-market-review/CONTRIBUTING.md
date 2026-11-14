@@ -53,13 +53,16 @@ EOF
 
 ```bash
 python3 -m unittest discover -s skills/daily-market-review/tests -p 'test_*.py'
+python3 -m unittest discover -s skills/streak-picker/tests -p 'test_*.py'
 ```
 
-GitHub Actions（仓库根目录 `.github/workflows/tests.yml`）跑同一条命令。流水线自建隔离 PostgreSQL，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
+GitHub Actions（仓库根目录 `.github/workflows/tests.yml`）按同样顺序跑这两条命令。复盘测试用到的隔离 PostgreSQL 由流水线自建，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
 
 ## 发布包内容
 
-从 `skills/daily-market-review/` 打包。最终用户版本包命名为 `daily-market-review-vX.Y.Z.zip`，解压后根目录为 `daily-market-review/`，应只包含运行所需内容（当前版本 0.5.0）：
+asharekit 整包发布。发布单位是套件，最终用户版本包命名为 `asharekit-vX.Y.Z.zip`，解压后得到并排的 skill 目录，一起放入 Agent 的 skill 目录。套件一个版本号；各 skill 文档里的版本号（如 daily-market-review 0.5.0）是该 skill 的口径记录，不对应独立发布包。
+
+`daily-market-review/` 应只包含运行所需内容（口径版本 0.5.0）：
 
 ```text
 daily-market-review/
@@ -80,15 +83,27 @@ daily-market-review/
 
 `config/` 只放未填写的示例模板，供用户复制到 `~/.marketreview/` 后自行填写。`contracts/` 与 `sql/migrations/` 是备份 / 恢复 / 核验工具的运行依赖（函数合同与迁移副本），必须打进版本包。不要把 `.git/`、`tests/`、`__pycache__/`、本地数据库、已填写的凭证、编辑器配置或其他开发产物放入版本包。
 
-版本包里的 `README.md` 只说明安装和日常使用，不链接源码仓库，也不链接 `CONTRIBUTING.md`。`CONTRIBUTING.md` 和开发文档不打进版本包。
+`streak-picker/` 应只包含运行所需内容：
+
+```text
+streak-picker/
+├── SKILL.md
+├── README.md
+├── LICENSE
+└── scripts/
+    ├── cli.py
+    └── streakpicker/
+```
+
+各 skill 的 `README.md` 只说明安装和日常使用，不链接源码仓库，也不链接 `CONTRIBUTING.md`。`CONTRIBUTING.md`、`CHANGELOG.md` 和开发文档不打进版本包。
 
 ## 发布检查清单
 
 正式发布前：
 
-1. 运行全部单元测试。
+1. 运行两个 skill 的全部单元测试。
 2. 确认或更新 `assets/trading_calendar.json` 的覆盖范围。
 3. 确认运行时说明文件不含开发文档目录字面量（由 `tests/test_runtime_docs.py` 覆盖；也可手动扫描 `SKILL.md`、`README.md` 和 `references/`）。
-4. 按上述目录结构生成 `daily-market-review-vX.Y.Z.zip`。
-5. 创建 GitHub Release，上传版本包（不要依赖 GitHub 自动生成的 Source code 压缩包）。
-6. 用解压后的 ZIP 独立安装测试一次，确认不依赖仓库中的额外文件（如 `tests/`）；并确认 `scripts/pg_backup.py` 在默认路径下能读到包内 `contracts/` 与 `sql/migrations/`（可用 `--help` / 合同文件存在性检查，不必连真实云端）。v0.3.4 发布包没有云端运行文件，不能当作当前交付包。验收不要求逐台交安装清单。
+4. 按上述目录结构生成 `asharekit-vX.Y.Z.zip`，含全部 skill 目录。
+5. 创建 GitHub Release，上传套件版本包（不要依赖 GitHub 自动生成的 Source code 压缩包）。
+6. 用解压后的 ZIP 独立安装测试一次，确认各 skill 不依赖仓库中的额外文件（如 `tests/`）；确认 `daily-market-review/scripts/pg_backup.py` 在默认路径下能读到包内 `contracts/` 与 `sql/migrations/`（可用 `--help` / 合同文件存在性检查，不必连真实云端）；确认 `streak-picker` 能通过同级目录调用 `../daily-market-review/scripts/cli.py`。v0.3.4 发布包没有云端运行文件，不能当作当前交付包。验收不要求逐台交安装清单。
