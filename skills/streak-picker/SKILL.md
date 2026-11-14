@@ -78,7 +78,8 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 | --- | --- | --- |
 | `no_record` | `review` 为 `null` 且 `events` 为空 | 库内无记录。停止 |
 | `no_closed_limit_up` | `ladder.groups` 为空，但 `review` 已有记录，或 `events` 非空 | 库内无收盘涨停事件。停止 |
-| `ok` | 候选池非空 | 按输出规则渲染三张表 |
+| `unclassifiable_rows` | 候选池非空，但首板和二板里没有一只三项判定字段都有值 | 一排和二排留空，说明 `message`。强势板块和龙头照常输出 |
+| `ok` | 候选池非空，且至少有一只首板或二板可以判定 | 按输出规则渲染三张表；`unclassified_rows` 里的股票单独列出 |
 
 `no_closed_limit_up` 只说明库内没有收盘涨停事件。有炸板或跌停事件时仍然用这一句。
 
@@ -118,9 +119,10 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
   - 收盘价**严格 < 30 元**（`close_price < 30`）；
   - 个股流通市值**严格 < 100 亿**（`stock_float_market_cap < 10_000_000_000` 元）；
   - 涨停限幅 10%（`limit_rate_bp = 1000`）。
-- **二排**：其余首板 / 二板（含走趋势股），上述条件放开。
+- **二排**：三项判定字段都有值、但确认不满足一排的首板 / 二板。收盘价、个股流通市值、涨停限幅都读得到，才谈得上「不满足」。
+- **无法分排**：三项判定字段任一为 `null` 的首板 / 二板。不估算，不进一排，也不进二排，列入 `unclassified_rows`，并写明缺失字段。
 
-一排的三项条件必须全部**确认满足**。任一项为 `null` 时不得估算，该股票不进一排，归入二排，并在命中依据里如实标注缺失字段。
+首板和二板里一只都判定不了时，一排和二排都留空，`status` 为 `unclassifiable_rows`。这种情况下不逐行铺开，用 `message` 说明缺的是哪些字段、涉及多少只。只要有一只首板或二板能判定，`status` 仍为 `ok`；缺字段的那几只仍写在 `unclassified_rows` 里，方便回补复盘数据。
 
 ### 4. 输出
 
@@ -128,7 +130,7 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 - 强势板块表：题材原文、涨停家数、最高连板、最早涨停时间、封单额合计、`basis`。
 - 龙头表：类别、所属题材（总龙头除外）、`market`、`code`、名称、连板高度、`basis`。`tied` 里的同高度股票也写出 `market` 和 `code`。日内龙头 `undetermined` 为 true 时，这一行只保留题材和 `basis`。
-- 一排 / 二排表：`market`、`code`、名称、连板高度、收盘价、个股流通市值、`limit_rate_bp`、`basis`。归入二排时，`basis` 同时写明数据缺失的字段和已经能判定为未满足的条件。
+- 一排 / 二排表：`market`、`code`、名称、连板高度、收盘价、个股流通市值、`limit_rate_bp`、`basis`。归入二排时，`basis` 写明未满足的一排条件。`unclassified_rows` 单独列出，写出 `market`、`code` 和缺失字段；这些行不是二排，也不是「已确认不满足」。
 
 空值规则：
 

@@ -16,10 +16,12 @@ STRONG_SECTOR_LIMIT = 3
 STATUS_OK = "ok"
 STATUS_NO_RECORD = "no_record"
 STATUS_NO_CLOSED_LIMIT_UP = "no_closed_limit_up"
+STATUS_UNCLASSIFIABLE_ROWS = "unclassifiable_rows"
 
 MESSAGE_NO_RECORD = "库内无记录"
 MESSAGE_NO_CLOSED_LIMIT_UP = "库内无收盘涨停事件"
 MESSAGE_INTRADAY_UNDETERMINED = "数据缺失，无法判定"
+MESSAGE_UNCLASSIFIABLE_ROWS = "首板和二板的收盘价、个股流通市值或涨停限幅均未保存，无法分排"
 
 
 class PickError(ValueError):
@@ -45,9 +47,24 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
         return _empty(STATUS_NO_CLOSED_LIMIT_UP, MESSAGE_NO_CLOSED_LIMIT_UP)
 
     strong = _strong_sectors(stocks)
+    row1 = [_candidate_row(stock, missing=[], unmet=[]) for stock in _row_sorted(_row1(stocks))]
+    row2 = [
+        _candidate_row(stock, missing=[], unmet=unmet)
+        for stock, unmet in _row2(stocks)
+    ]
+    unclassified = [
+        _candidate_row(stock, missing=missing, unmet=[])
+        for stock, missing in _unclassified_rows(stocks)
+    ]
+    has_classified_rows = bool(row1 or row2)
+    status = STATUS_OK
+    message = None
+    if not has_classified_rows and unclassified:
+        status = STATUS_UNCLASSIFIABLE_ROWS
+        message = MESSAGE_UNCLASSIFIABLE_ROWS
     return {
-        "status": STATUS_OK,
-        "message": None,
+        "status": status,
+        "message": message,
         "strong_sectors": [_sector_row(item) for item in strong],
         "leaders": {
             "market": _leader_row("总龙头", None, *_select_leader(stocks)),
@@ -59,11 +76,9 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
                 _intraday_row(item["theme"], item["stocks"]) for item in strong
             ],
         },
-        "row1": [_candidate_row(stock, missing=[], unmet=[]) for stock in _row_sorted(_row1(stocks))],
-        "row2": [
-            _candidate_row(stock, missing=missing, unmet=unmet)
-            for stock, missing, unmet in _row2(stocks)
-        ],
+        "row1": row1,
+        "row2": row2,
+        "unclassified_rows": unclassified,
     }
 
 
@@ -75,6 +90,7 @@ def _empty(status: str, message: str) -> dict[str, Any]:
         "leaders": {"market": None, "sectors": [], "intraday": []},
         "row1": [],
         "row2": [],
+        "unclassified_rows": [],
     }
 
 
@@ -304,15 +320,22 @@ def _row1(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [stock for stock in stocks if _row_split(stock) == (None, None)]
 
 
-def _row2(
-    stocks: list[dict[str, Any]],
-) -> list[tuple[dict[str, Any], list[str], list[str]]]:
-    chosen: list[tuple[dict[str, Any], list[str], list[str]]] = []
+def _row2(stocks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[str]]]:
+    chosen: list[tuple[dict[str, Any], list[str]]] = []
     for stock in _row_sorted([item for item in stocks if item["streak_height"] in (1, 2)]):
         missing, unmet = _row_split(stock)
-        if missing is None:
+        if missing is None or missing:
             continue
-        chosen.append((stock, missing, unmet))
+        chosen.append((stock, unmet))
+    return chosen
+
+
+def _unclassified_rows(stocks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[str]]]:
+    chosen: list[tuple[dict[str, Any], list[str]]] = []
+    for stock in _row_sorted([item for item in stocks if item["streak_height"] in (1, 2)]):
+        missing, _unmet = _row_split(stock)
+        if missing:
+            chosen.append((stock, missing))
     return chosen
 
 

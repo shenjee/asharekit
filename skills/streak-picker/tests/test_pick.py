@@ -91,11 +91,12 @@ class MixedFixtureTest(unittest.TestCase):
         self.assertTrue(all(item["market"] and item["code"] for item in result["leaders"]["sectors"]))
 
         self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "600099", "000010"])
-        self.assertEqual([item["code"] for item in result["row2"]], ["600003", "000001", "300001"])
-        self.assertEqual(result["row2"][0]["missing_fields"], ["stock_float_market_cap"])
-        self.assertIn("数据缺失：个股流通市值", result["row2"][0]["basis"])
-        self.assertEqual(result["row2"][1]["unmet"], ["收盘价不低于30元"])
-        self.assertEqual(result["row2"][2]["unmet"], ["涨停限幅不是10%"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["000001", "300001"])
+        self.assertEqual(result["row2"][0]["unmet"], ["收盘价不低于30元"])
+        self.assertEqual(result["row2"][1]["unmet"], ["涨停限幅不是10%"])
+        self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600003"])
+        self.assertEqual(result["unclassified_rows"][0]["missing_fields"], ["stock_float_market_cap"])
+        self.assertIn("数据缺失：个股流通市值", result["unclassified_rows"][0]["basis"])
         self.assertIn("40.00%", result["leaders"]["market"]["basis"])
 
         names = _names(result)
@@ -236,11 +237,51 @@ class RowBoundaryTest(unittest.TestCase):
         self.assertEqual(result["leaders"]["market"]["code"], "600001")
         self.assertEqual(result["leaders"]["market"]["seal_ratio"], 0.01)
 
-    def test_missing_field_and_failed_predicate_are_both_reported(self) -> None:
+    def test_missing_row_field_is_unclassified_even_when_another_field_fails(self) -> None:
         result = pick(_data([_stock(close_price=35, stock_float_market_cap=None)]))
-        row = result["row2"][0]
-        self.assertEqual(row["missing_fields"], ["stock_float_market_cap"])
-        self.assertEqual(row["unmet"], ["收盘价不低于30元"])
+        self.assertEqual(result["row1"], [])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600000"])
+        self.assertEqual(result["unclassified_rows"][0]["missing_fields"], ["stock_float_market_cap"])
+        self.assertEqual(result["unclassified_rows"][0]["unmet"], [])
+
+
+class MissingRowDataTest(unittest.TestCase):
+    def test_all_first_and_second_boards_missing_fields_leave_rows_empty(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="首板缺值", streak_height=1, close_price=None, stock_float_market_cap=None),
+                    _stock(code="600002", name="二板缺值", streak_height=2, close_price=None, stock_float_market_cap=None),
+                    _stock(code="600003", name="总龙头", streak_height=5, close_price=None, stock_float_market_cap=None),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "unclassifiable_rows")
+        self.assertEqual(
+            result["message"],
+            "首板和二板的收盘价、个股流通市值或涨停限幅均未保存，无法分排",
+        )
+        self.assertEqual(result["row1"], [])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600002", "600001"])
+        self.assertEqual(result["leaders"]["market"]["code"], "600003")
+
+    def test_some_missing_rows_are_listed_next_to_classified_rows(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="能进一排", streak_height=1),
+                    _stock(code="600002", name="明确二排", streak_height=1, close_price=35),
+                    _stock(code="600003", name="缺市值", streak_height=2, stock_float_market_cap=None),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertIsNone(result["message"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["600002"])
+        self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600003"])
 
 
 class CliTest(unittest.TestCase):
