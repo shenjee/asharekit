@@ -32,6 +32,126 @@ class TestCli(unittest.TestCase):
         )
         self._state_patch.start()
         self.addCleanup(self._state_patch.stop)
+        self._zt_patch = patch(
+            "marketreview.sources.eastmoney.EastMoneyLimitPoolClient.fetch_zt_pool",
+            return_value=[],
+        )
+        self._zb_patch = patch(
+            "marketreview.sources.eastmoney.EastMoneyLimitPoolClient.fetch_zb_pool",
+            return_value=[],
+        )
+        self._zt_patch.start()
+        self._zb_patch.start()
+        self.addCleanup(self._zt_patch.stop)
+        self.addCleanup(self._zb_patch.stop)
+
+    def test_save_events_enriches_from_eastmoney_pool(self) -> None:
+        from marketreview.sources.eastmoney import LimitPoolStock
+
+        event = {
+            "market": "sh",
+            "code": "603366",
+            "name": "日出东方",
+            "direction": "up",
+            "closed_at_limit": True,
+            "limit_rate_bp": 1000,
+            "streak_height": 5,
+        }
+        stock = LimitPoolStock(
+            market="sh",
+            code="603366",
+            name="日出东方",
+            industry="厨卫电器",
+            close_price=25.66,
+            seal_amount=170182252.0,
+            first_limit_time="09:30:18",
+            stock_float_market_cap=4943043301.08,
+            turnover_amount=38862070.0,
+            streak_height=5,
+            broken_count=0,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "market_review.sqlite3"
+            buffer = io.StringIO()
+            with patch(
+                "marketreview.sources.eastmoney.EastMoneyLimitPoolClient.fetch_zt_pool",
+                return_value=[stock],
+            ):
+                with patch("sys.stdin", io.StringIO(json.dumps({"events": [event]}))):
+                    with patch("sys.stdout", buffer):
+                        rc = cli.main(
+                            [
+                                "--backend",
+                                "sqlite",
+                                "--db",
+                                str(db_path),
+                                "save-events",
+                                "--date",
+                                "2026-08-21",
+                                "--input",
+                                "-",
+                            ]
+                        )
+            self.assertEqual(rc, 0)
+            payload = json.loads(buffer.getvalue())
+            self.assertEqual(payload["data"]["saved_count"], 1)
+            self.assertEqual(payload["data"]["enrich"]["patch_count"], 1)
+            self.assertTrue(payload["data"]["enrich"]["written"])
+
+            get_buffer = io.StringIO()
+            with patch("sys.stdout", get_buffer):
+                rc = cli.main(["--backend", "sqlite", "--db", str(db_path), "get", "--date", "2026-08-21"])
+            ladder = json.loads(get_buffer.getvalue())["data"]["ladder"]["groups"][0]["stocks"][0]
+            self.assertEqual(ladder["sectors"], ["厨卫电器"])
+            self.assertEqual(ladder["close_price"], 25.66)
+
+    def test_save_events_keeps_events_when_eastmoney_is_unavailable(self) -> None:
+        from marketreview.sources.eastmoney import EastMoneyPoolError
+
+        event = {
+            "market": "sh",
+            "code": "603366",
+            "name": "日出东方",
+            "direction": "up",
+            "closed_at_limit": True,
+            "limit_rate_bp": 1000,
+            "streak_height": 5,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "market_review.sqlite3"
+            buffer = io.StringIO()
+            with patch(
+                "marketreview.sources.eastmoney.EastMoneyLimitPoolClient.fetch_zt_pool",
+                side_effect=EastMoneyPoolError("东财涨停股池无响应"),
+            ):
+                with patch("sys.stdin", io.StringIO(json.dumps({"events": [event]}))):
+                    with patch("sys.stdout", buffer):
+                        rc = cli.main(
+                            [
+                                "--backend",
+                                "sqlite",
+                                "--db",
+                                str(db_path),
+                                "save-events",
+                                "--date",
+                                "2026-08-21",
+                                "--input",
+                                "-",
+                            ]
+                        )
+            self.assertEqual(rc, 1)
+            payload = json.loads(buffer.getvalue())
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error"]["code"], "SOURCE_UNAVAILABLE")
+            self.assertTrue(payload["data"]["events_saved"])
+            self.assertEqual(payload["data"]["saved_count"], 1)
+
+            get_buffer = io.StringIO()
+            with patch("sys.stdout", get_buffer):
+                rc = cli.main(["--backend", "sqlite", "--db", str(db_path), "get", "--date", "2026-08-21"])
+            events = json.loads(get_buffer.getvalue())["data"]["events"]
+            self.assertEqual([item["code"] for item in events], ["603366"])
+
     def test_get_and_save_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "market_review.sqlite3"

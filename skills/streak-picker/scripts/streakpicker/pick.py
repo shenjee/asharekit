@@ -160,10 +160,10 @@ def _normalize_stock(raw: Any) -> dict[str, Any]:
     name = raw.get("name")
     if not isinstance(name, str) or not name:
         raise PickError(f"{market} {code} 缺少 name")
-    reasons_raw = raw.get("limit_up_reasons")
-    reasons = [] if reasons_raw is None else reasons_raw
-    if not isinstance(reasons, list) or any(not isinstance(item, str) for item in reasons):
-        raise PickError(f"{market} {code} 的 limit_up_reasons 必须是字符串数组或 null")
+    sectors_raw = raw.get("sectors")
+    sectors = [] if sectors_raw is None else sectors_raw
+    if not isinstance(sectors, list) or any(not isinstance(item, str) for item in sectors):
+        raise PickError(f"{market} {code} 的 sectors 必须是字符串数组或 null")
     streak = _integer(raw.get("streak_height"), f"{market} {code} 的 streak_height")
     if streak is None:
         raise PickError(f"{market} {code} 缺少 streak_height")
@@ -175,7 +175,7 @@ def _normalize_stock(raw: Any) -> dict[str, Any]:
         "closed_at_limit": raw.get("closed_at_limit"),
         "streak_height": streak,
         "limit_rate_bp": _integer(raw.get("limit_rate_bp"), f"{market} {code} 的 limit_rate_bp"),
-        "limit_up_reasons": list(dict.fromkeys(reasons)),
+        "sectors": list(dict.fromkeys(sectors)),
         "first_limit_time": _text_or_none(raw.get("first_limit_time"), f"{market} {code} 的 first_limit_time"),
         "seal_ratio": _number(raw.get("seal_ratio"), f"{market} {code} 的 seal_ratio"),
         "seal_amount": _number(raw.get("seal_amount"), f"{market} {code} 的 seal_amount"),
@@ -218,8 +218,8 @@ def _text_or_none(value: Any, label: str) -> str | None:
 def _strong_sectors(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for stock in stocks:
-        for reason in stock["limit_up_reasons"]:
-            grouped.setdefault(reason, []).append(stock)
+        for sector in stock["sectors"]:
+            grouped.setdefault(sector, []).append(stock)
     ranked = sorted(
         (
             {"theme": theme, "stocks": members, **_sector_stats(members)}

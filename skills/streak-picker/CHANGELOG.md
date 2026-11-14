@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+**题材归类输入从涨停原因（`limit_up_reasons`）改为板块（`sectors`）**。涨停原因是数据商编辑归因产品、各家口径不一，不参与自动归类；`sectors` 为东方财富行业标签（hybk）原文，由复盘 skill 的 `enrich-events` 自动补齐。归类口径不变：`sectors` 原文归类，不合并近义词、不推断板块层级；`sectors` 为空的股票不参与板块归类和强势板块排序，但仍参与总龙头和一排 / 二排判定。强势板块排序键、一排 / 二排阈值、每类最多 3 只截断均不变。`pick` 输入中 `sectors` 非法（非字符串数组且非 `null`）时报错；`limit_up_reasons` 字段不再读取。
+
 ## 0.2.0
 
 一排 / 二排从「全部列出」改为**每类最多 3 只**（`row_display_limit`）：选股是筛选不是抄名单。排序统一为 连板高度（二板优先）→ 首次涨停时间 → 封成比 → 封单额 → `market` → `code`，取前 3；`unclassified_rows` 同样最多 3 只。`pick` 输出新增 `row1_total` / `row2_total` / `unclassified_total`（截断前总数），总数超过 3 时回复注明「共 N 只，取前 3」。输出行序同步改为同一强弱排序（原为 高度 → market → code）。
