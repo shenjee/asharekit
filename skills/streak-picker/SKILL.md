@@ -3,7 +3,7 @@ name: streak-picker
 description: "A股连板选股。用户要求从连板或每日梯队里筛选、排序、挑出候选、整理关注名单，或问强势板块、题材、总龙头、板块龙头、日内龙头、一排二排时使用。只读 daily-market-review 已保存的复盘结果。保存、补齐、修正或查看市场复盘时不使用本 skill。"
 metadata:
   author: stock-pilot
-  version: 0.1.0
+  version: 0.2.0
   category: finance
   tags:
     - a-share
@@ -115,6 +115,8 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 - **二排**：三项判定字段都有值、但确认不满足一排的首板 / 二板。收盘价、个股流通市值、涨停限幅都读得到，才谈得上「不满足」。
 - **无法分排**：三项判定字段任一为 `null` 的首板 / 二板。不估算，不进一排，也不进二排，列入 `unclassified_rows`，并写明缺失字段。
 
+**每类最多列 3 只**（`pick` 的 `row_display_limit`）。排序统一为：连板高度（二板优先）→ 首次涨停时间（早者优先，`null` 排后）→ 封成比（大者优先）→ 封单额（大者优先）→ `market` → `code`，取前 3 只。选股是筛选不是抄名单：总数超过 3 只时绝不能逐只铺开。`pick` 的 `row1_total` / `row2_total` / `unclassified_total` 是截断前的总数；总数超过 3 时，回复必须注明「共 N 只，取前 3」，不得把取出的 3 只说成全部候选。
+
 首板和二板里一只都判定不了时，一排和二排都留空，`status` 为 `unclassifiable_rows`。这种情况下不逐行铺开，用 `message` 说明缺的是哪些字段（按实际缺失列出，不罗列未缺失的字段）、涉及多少只。只要有一只首板或二板能判定，`status` 仍为 `ok`；缺字段的那几只仍写在 `unclassified_rows` 里，方便回补复盘数据。候选池里一只首板或二板都没有时，`status` 为 `no_row_candidates`，两排留空并说明。
 
 ### 4. 输出
@@ -123,7 +125,7 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 - 强势板块表：题材原文、涨停家数、最高连板、最早涨停时间、封单额合计、`basis`。
 - 龙头表：类别、所属题材（总龙头除外）、`market`、`code`、名称、连板高度、`basis`。`tied` 里的同高度股票也写出 `market` 和 `code`。日内龙头 `undetermined` 为 true 时，这一行只保留题材和 `basis`。
-- 一排 / 二排表：`market`、`code`、名称、连板高度、收盘价、个股流通市值、`limit_rate_bp`、`basis`。归入二排时，`basis` 写明未满足的一排条件。`unclassified_rows` 单独列出，写出 `market`、`code` 和缺失字段；这些行不是二排，也不是「已确认不满足」。
+- 一排 / 二排表：`market`、`code`、名称、连板高度、收盘价、个股流通市值、`limit_rate_bp`、`basis`。归入二排时，`basis` 写明未满足的一排条件。`unclassified_rows` 单独列出（同样最多 3 只，超出按 `unclassified_total` 注明总数），写出 `market`、`code` 和缺失字段；这些行不是二排，也不是「已确认不满足」。
 
 空值规则：
 
