@@ -69,9 +69,10 @@ python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21
 
 ```bash
 python3 -m unittest discover -s skills/daily-market-review/tests -p 'test_*.py'
+python3 -m unittest discover -s skills/streak-picker/tests -p 'test_*.py'
 ```
 
-GitHub Actions 跑同一条命令。流水线自建隔离 PostgreSQL，不读取 Secret、数据库密码或 `~/.marketreview`。
+GitHub Actions 跑这两条命令。流水线自建隔离 PostgreSQL，不读取 Secret、数据库密码或 `~/.marketreview`。
 
 ## 许可证
 
