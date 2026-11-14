@@ -26,21 +26,13 @@ metadata:
 
 ## 数据
 
-只读复盘 skill 的 JSON CLI。先取得复盘 skill 目录的绝对路径，替换下面的 `<review-skill-dir>`：
+只读复盘 skill 的 JSON CLI。`<skill-dir>` 是本文件所在目录（`streak-picker` 的安装目录）：
 
 ```bash
-python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21
+python3 "<skill-dir>/../daily-market-review/scripts/cli.py" get --date 2026-08-21
 ```
 
-目录按这个顺序查找已安装的复盘版本包，找到第一个含 `scripts/cli.py` 的路径后停止：
-
-```text
-MARKETREVIEW_SKILL_DIR
-> ~/.codex/skills/daily-market-review
-> ~/.cursor/skills/daily-market-review
-```
-
-这三处都是安装位置。不要改用源码仓库里的 `skills/daily-market-review/`。三处都不存在时，说明找不到已安装的 `daily-market-review`，不要改去打开 `~/.marketreview/market_review.sqlite3`，也不要 import `marketreview`。
+本 skill 与 `daily-market-review` 同属 asharekit 套件，安装时放在同一个 skill 目录、互为同级目录。同级目录是唯一依据，不查其他位置，不用环境变量。同级目录里没有 `daily-market-review`（或没有 `scripts/cli.py`）时，说明套件没有完整安装：报告「找不到已安装的 daily-market-review，请重新安装 asharekit 套件版本包」，停止。不要改用源码仓库里的 `skills/daily-market-review/`，不要打开 `~/.marketreview/market_review.sqlite3`，也不要 import `marketreview`。
 
 `get` 的输出格式、交易日和展示口径以复盘 skill 的 `SKILL.md` 为准。本 skill 不保存自己的账本。候选和命中依据只出现在当次回复里，不写入 `market_review` 的表。
 

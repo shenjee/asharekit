@@ -14,6 +14,8 @@
 
 `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap` 只使用 `get` 读到的值。值为 `null` 时按数据缺失处理，不区分数据存放在哪里。本 skill 仍只读复盘 CLI，不写库，不输出买卖指令。
 
+**发布方式**：asharekit 改为整包发布，本 skill 不再单独出 `streak-picker-vX.Y.Z.zip`，随套件版本包 `asharekit-vX.Y.Z.zip` 一起发布。`daily-market-review` 由同级目录定位（`../daily-market-review`），删除 `MARKETREVIEW_SKILL_DIR` 和 `~/.codex`、`~/.cursor` 的查找链；同级目录找不到即报「找不到已安装的 daily-market-review」并停止。skill 文档里的版本号保留为口径记录，发布与安装以套件版本为准。
+
 ## 0.0.1
 
 占位版。只确定与 `daily-market-review` 的边界（只读 `get`，禁止保存命令，不写买卖指令），选股规则未发布。

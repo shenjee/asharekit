@@ -1,6 +1,6 @@
 # 连板选股
 
-当前版本：**0.1.0**。从 `daily-market-review` 已保存的连板里筛选、排序，并给出候选和命中依据。
+当前版本：**0.1.0**（本 skill 的口径版本；发布与安装以 asharekit 套件版本为准）。从 `daily-market-review` 已保存的连板里筛选、排序，并给出候选和命中依据。
 
 ## 本版会做什么
 
@@ -15,7 +15,7 @@
 计算由本 skill 的脚本完成，回复按它的输出渲染：
 
 ```bash
-python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21 \
+python3 "<skill-dir>/../daily-market-review/scripts/cli.py" get --date 2026-08-21 \
   | python3 "<skill-dir>/scripts/cli.py" pick --input -
 ```
 
@@ -27,19 +27,13 @@ python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21 \
 
 ## 和复盘 skill 的关系
 
-本 skill 与 `daily-market-review` 并列，同在 asharekit 仓库的 `skills/` 下。它只读复盘结果：
+本 skill 与 `daily-market-review` 同属 asharekit 套件，随同一个套件版本包发布，安装时在同一个 skill 目录下互为同级目录。它只读复盘结果：
 
 ```bash
-python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21
+python3 "<skill-dir>/../daily-market-review/scripts/cli.py" get --date 2026-08-21
 ```
 
-`<review-skill-dir>` 是已经安装的复盘版本包，查找顺序：
-
-1. `MARKETREVIEW_SKILL_DIR`
-2. `~/.codex/skills/daily-market-review`
-3. `~/.cursor/skills/daily-market-review`
-
-这三处都是安装位置，不是源码仓库里的 `skills/daily-market-review/`。
+`<skill-dir>` 是本 skill 的安装目录。同级目录是唯一依据，没有查找列表，也没有环境变量。同级目录里没有 `daily-market-review` 时说明套件没有完整安装，停止并提示重新安装套件版本包。源码仓库里的 `skills/daily-market-review/` 不是安装位置。
 
 本 skill 不 import `marketreview`，不直接打开 SQLite。选股结果不进入 `market_review` 的表。封单、成交额、题材这类市场事实归复盘 skill 的事件字段。排序和过滤规则归本 skill，见 `SKILL.md` 的「选股规则」一节。
 
@@ -49,6 +43,6 @@ python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21
 
 ## 安装
 
-版本包命名为 `streak-picker-vX.Y.Z.zip`，发布在 [shenjee/asharekit 的 Releases](https://github.com/shenjee/asharekit/releases)。安装只使用这个版本包，解压后的目录才是 skill 目录。不要克隆源码仓库，也不要把源码目录放进 Agent 的 skill 目录。
+本 skill 不单独发布，随 asharekit 套件版本包 `asharekit-vX.Y.Z.zip` 一起发布在 [shenjee/asharekit 的 Releases](https://github.com/shenjee/asharekit/releases)。安装步骤见[仓库根 README](../../README.md)。解压后把 `daily-market-review/` 与 `streak-picker/` 一起放入 Agent 的 skill 目录，保持同级。不要克隆源码仓库，也不要把源码目录放进 Agent 的 skill 目录。
 
-本 skill 依赖已安装的 `daily-market-review` 版本包。选股前请确认复盘 skill 已安装且当日复盘已保存；库里没有记录时本 skill 只说明「库内无记录」，不会自己去抓行情。
+本 skill 依赖同级目录里的 `daily-market-review`。选股前请确认当日复盘已保存；库里没有记录时本 skill 只说明「库内无记录」，不会自己去抓行情。

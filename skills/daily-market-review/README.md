@@ -1,6 +1,6 @@
 # Daily Market Review
 
-当前版本：**0.5.0**。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
+当前版本：**0.5.0**（本 skill 的口径版本；发布与安装以 asharekit 套件版本为准）。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
 
 ## 功能
 
@@ -25,24 +25,24 @@
 
 只安装 GitHub Release 上的版本包。不要克隆源码仓库，也不要把源码目录放进 Agent 的 skill 目录。安装完成后不需要保存源码仓库。
 
-本 skill 属于 asharekit。版本包发布在 [shenjee/asharekit 的 Releases](https://github.com/shenjee/asharekit/releases)。
+本 skill 属于 asharekit 套件，随套件版本包 `asharekit-vX.Y.Z.zip` 一起发布在 [shenjee/asharekit 的 Releases](https://github.com/shenjee/asharekit/releases)。套件整包安装：解压后把包内所有 skill 目录一起放入 Agent 的 skill 目录，保持同级——同套件的 `streak-picker` 靠同级目录找到本 skill。
 
 不同 Agent 需要分别安装一份 Skill。云端模式是否共享取决于是否连接同一 Supabase 项目，与 `MARKETREVIEW_HOME` 无关；正式与测试账本应连接不同项目。本地 SQLite 模式只有解析到同一数据库文件时才共享；`MARKETREVIEW_HOME` 改变本地目录，`--db` 可覆盖该路径。
 
 ### 让 Agent 安装
 
-把 Release 里的版本包交给 Agent，或让它从 Releases 下载后再安装。例如：
+把 Release 里的套件版本包交给 Agent，或让它从 Releases 下载后再安装。例如：
 
-- 「请从 https://github.com/shenjee/asharekit/releases 安装最新的 daily-market-review 版本包，不要克隆源码仓库。」
-- 「帮我安装 daily-market-review 市场复盘 Skill 的发布包」
+- 「请从 https://github.com/shenjee/asharekit/releases 安装最新的 asharekit 套件版本包，不要克隆源码仓库。」
+- 「帮我安装 asharekit 套件的发布包」
 
 安装完成后，先完成下文「云端配置模板」和「云端初始化」，或明确配置 `backend=sqlite` 使用本地模式，再开始使用。
 
 ### 手动安装
 
-1. 打开项目的 [Releases 页面](https://github.com/shenjee/asharekit/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.5.0.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
-2. 解压，得到 `daily-market-review` 目录。
-3. 将该目录放入所使用 Agent 的 Skill 目录。
+1. 打开项目的 [Releases 页面](https://github.com/shenjee/asharekit/releases)，下载最新的套件版本包 `asharekit-vX.Y.Z.zip`。请勿下载 GitHub 自动生成的 `Source code (zip)`。
+2. 解压，得到并排的 skill 目录（含 `daily-market-review/`）。
+3. 把这些目录一起放入所使用 Agent 的 Skill 目录，保持同级。
 
 各 Agent 的 Skill 目录位置请参考其官方文档。安装完成后，重启或刷新 Agent，使其加载新 Skill；首次使用前仍须完成云端配置与初始化，或明确选择本地模式。
 
