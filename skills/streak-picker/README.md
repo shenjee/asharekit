@@ -41,9 +41,9 @@ python3 "<review-skill-dir>/scripts/cli.py" get --date 2026-08-21
 
 本 skill 不 import `marketreview`，不直接打开 SQLite。选股结果不进入 `market_review` 的表。封单、成交额、题材这类市场事实归复盘 skill 的事件字段。排序和过滤规则归本 skill，见 `SKILL.md` 的「选股规则」一节。
 
-## 数据依赖
+## 读到的字段
 
-一排 / 二排和龙头排序依赖复盘 skill **0.5.0** 新增的五个事件明细键（`seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap`），它们要求云端已部署迁移 `0006_limit_up_strength.sql`。未部署前读取结果为 `null`，本 skill 全部按数据缺失处理，不改用其他来源补齐。
+一排 / 二排和龙头排序使用 `get` 结果里的 `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap`。这些值从哪来由复盘 skill 决定。本 skill 不区分 Supabase、SQLite 或其他后端。读到 `null` 就按数据缺失处理，不估算，也不改用其他来源补齐。
 
 ## 安装
 

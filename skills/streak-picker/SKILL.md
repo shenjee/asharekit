@@ -133,7 +133,7 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 空值规则：
 
 - 筛选和排序遇到 `null` 一律按「数据缺失」如实标注，不得估算、不得补 `0`。
-- 五个新键（`seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap`）依赖云端迁移 `0006_limit_up_strength.sql`。未部署前读取结果为 `null`，全部按数据缺失处理；不要因此改用其他来源补齐。
+- `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap` 只使用 `get` 读到的值。值为 `null` 时按数据缺失处理，不估算，不改用其他来源补齐。本 skill 不关心这些值存在 Supabase、SQLite 还是别处。
 
 展示口径（与复盘 skill 一致）：
 

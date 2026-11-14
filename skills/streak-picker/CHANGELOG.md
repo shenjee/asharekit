@@ -12,7 +12,7 @@
 - **并列**：龙头在首次涨停时间、封成比、封单额之后用 `market`、`code` 决定一只。强势板块不足 3 个则全部列出；四个排序键都相同时按题材原文的 Unicode 码位取前 3。板块内没有任何首次涨停时间时，日内龙头为「数据缺失，无法判定」
 - **可执行口径**：`scripts/streakpicker/pick.py`，夹具和测试在 `tests/`
 
-数据依赖复盘 skill 0.5.0 的五个事件明细键；云端未部署 `0006_limit_up_strength.sql` 时这些键为 `null`，全部按数据缺失处理。本 skill 仍只读复盘 CLI，不写库，不输出买卖指令。
+`seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap` 只使用 `get` 读到的值。值为 `null` 时按数据缺失处理，不区分数据存放在哪里。本 skill 仍只读复盘 CLI，不写库，不输出买卖指令。
 
 ## 0.0.1
 
