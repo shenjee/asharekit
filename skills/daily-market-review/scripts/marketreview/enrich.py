@@ -2,7 +2,7 @@
 
 口径：
 - 只补缺，不覆盖：明细字段当前为 None、sectors 当前为空时才写入（人工优先）；
-- 涨停事件对涨停池，炸板事件对炸板池，按 6 位代码匹配；
+- 只处理 direction=up：收盘涨停对涨停池，炸板对炸板池，按 6 位代码匹配；跌停不参与补缺，也不进未匹配；
 - 不写 limit_up_reasons（东财池没有该字段，原因文字维持人工喂入）；
 - 连板数对账只报告、不改账。
 """
@@ -49,6 +49,8 @@ def build_enrich_patches(
     market_mismatch: list[dict[str, Any]] = []
 
     for event in events:
+        if event.direction != "up":
+            continue
         identity = f"{event.market} {event.code} {event.direction}"
         pool = zt_by_code if event.closed_at_limit else zb_by_code
         stock = pool.get(event.code)

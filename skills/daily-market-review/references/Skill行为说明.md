@@ -229,7 +229,7 @@ get 回读；各类分别报告采集结果与保存结果
 
 ### 涨停强度明细
 
-范围内的 `direction=up` 事件完成 `save-events` 后，对同一批事件采集并 `save-event-details`：
+`save-events` 落库成功后自动从东方财富涨停/炸板股池补齐范围内 `direction=up` 事件的 `seal_amount`、`first_limit_time`、`close_price`、`stock_float_market_cap`、`turnover_amount` 和 `sectors`（只补缺，不覆盖已有值；跌停不参与）。这一步包含在 `save-events` 里，不要再跑第二条命令。拉源失败时事件已落库，命令返回 `SOURCE_UNAVAILABLE`，不要重跑 `save-events`；历史日期和只要报告不写库时用 `enrich-events`（`--dry-run`）。东财没给到、或要改成人工值时才 `save-event-details`。写入口径：
 
 | 字段 | 写入口径 |
 | --- | --- |
@@ -241,7 +241,7 @@ get 回读；各类分别报告采集结果与保存结果
 
 确认不到的字段不写。新记录保持 `null`，已有值保持原值。不得用 `0`、空字符串或推算值占位。跌停事件不写 `first_limit_time`。
 
-完整复盘和涨停类采集都要在范围内尝试其余四项（`seal_ratio` 由封单额和成交额在读取时计算，不采集、不写入）。点名只改一条事件或一个其他字段时，不把这四项扩大成全市场补采。
+这四项随 `save-events` 自动补缺，不必另采。`seal_ratio` 由封单额和成交额在读取时计算，不采集、不写入。点名只改一条事件或一个其他字段时，不把这四项扩大成全市场补采。
 
 ### 禁止的结束方式
 

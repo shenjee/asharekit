@@ -4,11 +4,12 @@
 
 新增 `enrich-events` 命令与东方财富股池数据源（`sources/eastmoney.py`，stdlib urllib，无第三方依赖）：
 
-- 保存涨跌停事件后，用东方财富涨停/炸板股池（push2ex `getTopicZTPool` / `getTopicZBPool`）自动补齐当日事件的 `seal_amount`、`first_limit_time`、`close_price`、`stock_float_market_cap`、`turnover_amount` 和 `sectors`（东财行业标签 hybk，原文入库——接口自身可能截断长标签，如「房地产开发」→「房地产开」，按原文保存不修补）；
+- `save-events` 在事件落库后自动用东方财富涨停/炸板股池（push2ex `getTopicZTPool` / `getTopicZBPool`）补齐当日向上事件的 `seal_amount`、`first_limit_time`、`close_price`、`stock_float_market_cap`、`turnover_amount` 和 `sectors`（东财行业标签 hybk，原文入库——接口自身可能截断长标签，如「房地产开发」→「房地产开」，按原文保存不修补）。拉源失败报 `SOURCE_UNAVAILABLE`，已写入的事件不回滚；
+- `enrich-events` 留给历史回填和 `--dry-run`（只出补缺报告不写库）；
 - **只补缺、不覆盖**：字段已有值或 `sectors` 非空（人工优先）时跳过；市场标志不一致的匹配拒绝写入并报告；
-- 连板数对账（东财 `lbc` vs 账本 `streak_height`）只报告、不改账；未匹配事件逐条列出；
-- **不写 `limit_up_reasons`**：东财池没有涨停原因字段，原因文字维持人工喂入；
-- `--dry-run` 只出补缺报告不写库；历史日期用同一命令回填；拉取失败报 `SOURCE_UNAVAILABLE`。
+- 只处理 `direction=up` 的收盘涨停和炸板。跌停不补缺，也不进未匹配；
+- 连板数对账（东财 `lbc` vs 账本 `streak_height`）只报告、不改账；未匹配的向上事件逐条列出；
+- **不写 `limit_up_reasons`**：东财池没有涨停原因字段，原因文字维持人工喂入。
 
 无数据库迁移：复用 0006 的明细列与既有 `daily_price_limit_event_sector` 多值表。
 

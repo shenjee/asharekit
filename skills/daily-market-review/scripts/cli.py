@@ -28,8 +28,8 @@ def _success(data: Any) -> None:
     _emit({"ok": True, "data": data, "error": None})
 
 
-def _failure(error: str, *, code: str = "ERROR") -> None:
-    _emit({"ok": False, "data": None, "error": {"code": code, "message": error}})
+def _failure(error: str, *, code: str = "ERROR", data: Any = None) -> None:
+    _emit({"ok": False, "data": data, "error": {"code": code, "message": error}})
 
 
 def _read_json_input(path: str) -> Any:
@@ -110,7 +110,35 @@ def cmd_save_events(args: argparse.Namespace) -> int:
         state_dir=getattr(args, "state_dir", None),
     ) as repo:
         repo.save_price_limit_events(trade_date, events)
-    _success({"trade_date": trade_date, "saved_count": len(events)})
+    if not events:
+        _success({"trade_date": trade_date, "saved_count": 0})
+        return 0
+    # 事件已提交。补缺失败只报告，不回滚。
+    try:
+        from marketreview.sources.eastmoney import EastMoneyLimitPoolClient, EastMoneyPoolError
+
+        zt_pool = EastMoneyLimitPoolClient.fetch_zt_pool(trade_date)
+        zb_pool = EastMoneyLimitPoolClient.fetch_zb_pool(trade_date)
+    except EastMoneyPoolError as exc:
+        _failure(
+            str(exc),
+            code="SOURCE_UNAVAILABLE",
+            data={
+                "trade_date": trade_date,
+                "saved_count": len(events),
+                "events_saved": True,
+            },
+        )
+        return 1
+    from marketreview.enrich import enrich_events
+
+    with open_repository(
+        backend=args.backend,
+        db_path=args.db,
+        state_dir=getattr(args, "state_dir", None),
+    ) as repo:
+        report = enrich_events(repo, trade_date, zt_pool=zt_pool, zb_pool=zb_pool)
+    _success({"trade_date": trade_date, "saved_count": len(events), "enrich": report})
     return 0
 
 

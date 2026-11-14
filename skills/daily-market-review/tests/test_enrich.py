@@ -209,6 +209,16 @@ class BuildPatchesTest(unittest.TestCase):
         self.assertEqual(patches, [])
         self.assertEqual(len(report["market_mismatch"]), 1)
 
+    def test_down_events_are_skipped_not_unmatched(self) -> None:
+        down_closed = _event(direction="down", closed_at_limit=True, streak_height=0, code="600010", name="收盘跌停")
+        down_opened = _event(direction="down", closed_at_limit=False, streak_height=0, code="600011", name="打开跌停")
+        # 跌停代码即使出现在涨停池里也不补、不计未匹配
+        pool = [_stock(), _stock(code="600010"), _stock(code="600011")]
+        patches, report = build_enrich_patches([down_closed, down_opened, _event()], [], pool, [])
+        self.assertEqual([patch["code"] for patch in patches], ["603366"])
+        self.assertEqual(report["unmatched"], [])
+        self.assertEqual(report["market_mismatch"], [])
+
     def test_never_writes_limit_up_reasons(self) -> None:
         patches, _report = build_enrich_patches([_event()], [_detail()], [_stock()], [])
         for patch in patches:
