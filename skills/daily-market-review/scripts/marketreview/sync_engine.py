@@ -1051,8 +1051,9 @@ def _replace_business(conn: sqlite3.Connection, snapshot: Mapping[str, Any]) -> 
             INSERT INTO daily_price_limit_event_detail (
                 trade_date, market, code, direction,
                 previous_turnover_amount, auction_amount, previous_close, open_price,
-                turnover_amount, turnover_rate, is_leader, note, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                turnover_amount, turnover_rate, seal_amount, first_limit_time,
+                close_price, stock_float_market_cap, is_leader, note, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 detail["trade_date"],
@@ -1065,6 +1066,10 @@ def _replace_business(conn: sqlite3.Connection, snapshot: Mapping[str, Any]) -> 
                 _sql_float(detail["open_price"]),
                 _sql_float(detail["turnover_amount"]),
                 _sql_float(detail["turnover_rate"]),
+                _sql_float(detail.get("seal_amount")),
+                detail.get("first_limit_time"),
+                _sql_float(detail.get("close_price")),
+                _sql_float(detail.get("stock_float_market_cap")),
                 _sql_leader(detail["is_leader"]),
                 detail["note"],
                 detail["created_at"],

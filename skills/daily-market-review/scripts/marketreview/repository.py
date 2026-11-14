@@ -58,6 +58,14 @@ def _row_to_event(row: sqlite3.Row) -> PriceLimitEventRecord:
     )
 
 
+def _compute_seal_ratio(seal_amount: float | None, turnover_amount: float | None) -> float | None:
+    if seal_amount is None or turnover_amount is None:
+        return None
+    if turnover_amount == 0:
+        return None
+    return seal_amount / turnover_amount
+
+
 def _sql_to_bool(value: Any) -> bool | None:
     if value is None:
         return None
@@ -227,6 +235,11 @@ def _empty_detail_record(
         open_price=None,
         turnover_amount=None,
         turnover_rate=None,
+        seal_amount=None,
+        seal_ratio=None,
+        first_limit_time=None,
+        close_price=None,
+        stock_float_market_cap=None,
         is_leader=None,
         note=None,
         sectors=[],
@@ -246,6 +259,11 @@ def _detail_record_from_row(row: sqlite3.Row) -> PriceLimitEventDetailRecord:
         open_price=row["open_price"],
         turnover_amount=row["turnover_amount"],
         turnover_rate=row["turnover_rate"],
+        seal_amount=row["seal_amount"],
+        seal_ratio=_compute_seal_ratio(row["seal_amount"], row["turnover_amount"]),
+        first_limit_time=row["first_limit_time"],
+        close_price=row["close_price"],
+        stock_float_market_cap=row["stock_float_market_cap"],
         is_leader=_sql_to_bool(row["is_leader"]),
         note=row["note"],
         sectors=[],
@@ -821,15 +839,18 @@ class MarketReviewRepository:
         now: str,
     ) -> None:
         record, has_detail_row = extension
+        if direction != "up":
+            record = replace(record, first_limit_time=None)
         if has_detail_row:
             self._conn.execute(
                 """
                 INSERT INTO daily_price_limit_event_detail (
                     trade_date, market, code, direction,
                     previous_turnover_amount, auction_amount, previous_close, open_price,
-                    turnover_amount, turnover_rate, is_leader, note,
+                    turnover_amount, turnover_rate, seal_amount, first_limit_time,
+                    close_price, stock_float_market_cap, is_leader, note,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade_date,
@@ -842,6 +863,10 @@ class MarketReviewRepository:
                     record.open_price,
                     record.turnover_amount,
                     record.turnover_rate,
+                    record.seal_amount,
+                    record.first_limit_time,
+                    record.close_price,
+                    record.stock_float_market_cap,
                     _bool_to_sql(record.is_leader),
                     record.note,
                     now,

@@ -1,6 +1,6 @@
 # Daily Market Review
 
-当前版本：**0.4.3**。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
+当前版本：**0.5.0**。每日资本市场总体复盘 Skill，用于整理、保存和查看指定交易日的市场复盘数据。
 
 ## 功能
 
@@ -40,7 +40,7 @@
 
 ### 手动安装
 
-1. 打开项目的 [Releases 页面](https://github.com/shenjee/asharekit/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.4.3.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
+1. 打开项目的 [Releases 页面](https://github.com/shenjee/asharekit/releases)，下载最新版本包。文件名格式为 `daily-market-review-vX.Y.Z.zip`（例如 `daily-market-review-v0.5.0.zip`）。请勿下载 GitHub 自动生成的 `Source code (zip)`。
 2. 解压，得到 `daily-market-review` 目录。
 3. 将该目录放入所使用 Agent 的 Skill 目录。
 
@@ -112,9 +112,20 @@ chmod 600 ~/.marketreview/supabase.secret
 
 ### 云端初始化
 
-安装客户端、复制配置模板和填写凭证都不会自动部署云端数据库。新项目须由有数据库管理权限的维护者，使用管理连接或 SQL 编辑器，按文件编号依次执行发布包 `sql/migrations/` 中的 `0001`、`0002`、`0003`、`0004`、`0005` 迁移；已有项目先核对已部署迁移，仅应用缺失部分。迁移包含表、函数、RPC wrappers 和服务端超时设置，不能只建表。现有项目迁移前先做云端备份。
+安装客户端、复制配置模板和填写凭证都不会自动部署云端数据库。新项目须由有数据库管理权限的维护者，使用管理连接或 SQL 编辑器，按文件编号依次执行发布包 `sql/migrations/` 中的 `0001`、`0002`、`0003`、`0004`、`0005`、`0006` 迁移；已有项目先核对已部署迁移，仅应用缺失部分。迁移包含表、函数、RPC wrappers 和服务端超时设置，不能只建表。现有项目迁移前先做云端备份。
 
 部署完成后，用下方显式 Supabase 的 `get` 命令检查读取是否成功。缺表 / 函数 / RPC 时应核对项目和迁移部署，不要反复更换密钥。一次读取成功只是连通性检查，不能代替迁移完整性与备份恢复核验。
+
+### 从 0.4.x 升级到 0.5.0
+
+0.5.0 给涨停事件明细新增五个键（`seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap`），其中 `seal_ratio` 是读取派生字段（`seal_amount ÷ turnover_amount`），不入库。客户端不会自动部署云端迁移；**未部署 `0006` 前，日常复盘读写不受影响，只是其余四项写不进去，读取云端旧明细时缺键一律按 `null` 处理，不会报错。** 升级步骤：
+
+1. 现有项目先做云端备份（Dashboard → Database → Backups，或按备份恢复流程）。
+2. 部署 `0006`，二选一：
+   - **SQL Editor**：Supabase Dashboard → SQL Editor，粘贴发布包 `sql/migrations/0006_limit_up_strength.sql` 全文执行；
+   - **psql 管理连接**：`psql "postgresql://postgres:<数据库密码>@db.<项目ref>.supabase.co:5432/postgres" -f sql/migrations/0006_limit_up_strength.sql`。注意 `supabase.secret` 里的 Secret 是 API 密钥，不是数据库密码，不能用于 psql。
+   `0006` 的列用 `ADD COLUMN IF NOT EXISTS`、函数用 `CREATE OR REPLACE`，重复执行不会失败；只部署 `0006` 即可，不需要重跑 `0001`–`0005`。
+3. 用 `get` 回读任一交易日确认读取正常，再写一条带 `seal_amount` 和 `turnover_amount` 的明细，确认四项可写入、`seal_ratio` 读取时按公式算出。历史明细保持空值，不回填。
 
 ### 从 0.3.4 升级到 0.4.0
 

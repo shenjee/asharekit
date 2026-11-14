@@ -100,15 +100,19 @@ def validate_atomic_field(key: str, value: Any) -> Any:
     raise InvalidFieldValueError(f"未知字段：{key}")
 
 
-_DETAIL_PRICE_FIELDS = frozenset({"previous_close", "open_price"})
+_DETAIL_PRICE_FIELDS = frozenset({"previous_close", "open_price", "close_price", "stock_float_market_cap"})
 _DETAIL_NON_NEGATIVE_FIELDS = frozenset(
     {
         "previous_turnover_amount",
         "auction_amount",
         "turnover_amount",
         "turnover_rate",
+        "seal_amount",
     }
 )
+_FIRST_LIMIT_TIME = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$")
+_FIRST_LIMIT_TIME_START = 9 * 3600 + 25 * 60
+_FIRST_LIMIT_TIME_END = 15 * 3600
 _DETAIL_ALLOWED_FIELDS = (
     PRICE_LIMIT_EVENT_DETAIL_IDENTITY_FIELD_NAMES
     | PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_NAMES
@@ -134,6 +138,21 @@ def normalize_string_list(field_name: str, value: Any) -> list[str]:
     return normalized
 
 
+def normalize_first_limit_time(value: str) -> str:
+    match = _FIRST_LIMIT_TIME.fullmatch(value.strip())
+    if match is None:
+        raise InvalidFieldValueError("first_limit_time 必须为 HH:MM 或 HH:MM:SS")
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    second = int(match.group(3) or 0)
+    if minute > 59 or second > 59:
+        raise InvalidFieldValueError("first_limit_time 不是有效时间")
+    total = hour * 3600 + minute * 60 + second
+    if total < _FIRST_LIMIT_TIME_START or total > _FIRST_LIMIT_TIME_END:
+        raise InvalidFieldValueError("first_limit_time 必须在 09:25:00 至 15:00:00")
+    return f"{hour:02d}:{minute:02d}:{second:02d}"
+
+
 def validate_event_detail_scalar(field_name: str, value: Any) -> Any:
     if field_name not in PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_NAMES:
         raise InvalidFieldValueError(f"未知字段：{field_name}")
@@ -147,6 +166,10 @@ def validate_event_detail_scalar(field_name: str, value: Any) -> Any:
         if not _is_finite_number(value) or float(value) < 0:
             raise InvalidFieldValueError(f"{field_name} 必须为大于等于 0 的有限数值")
         return float(value)
+    if field_name == "first_limit_time":
+        if type(value) is not str:
+            raise InvalidFieldValueError(f"first_limit_time 必须为字符串或 null：{value!r}")
+        return normalize_first_limit_time(value)
     if field_name == "is_leader":
         if type(value) is not bool:
             raise InvalidFieldValueError(f"is_leader 必须为布尔值或 null：{value!r}")
@@ -180,6 +203,8 @@ def validate_event_detail_payload(detail: Mapping[str, Any]) -> None:
     direction = detail.get("direction")
     if "limit_up_reasons" in detail and direction != "up":
         raise InvalidFieldValueError("limit_up_reasons 只允许写入 direction=up 的事件")
+    if "first_limit_time" in detail and direction != "up":
+        raise InvalidFieldValueError("first_limit_time 只允许写入 direction=up 的事件")
 
     for field_name in PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_NAMES:
         if field_name in detail:

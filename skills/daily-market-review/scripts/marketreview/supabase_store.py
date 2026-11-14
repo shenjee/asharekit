@@ -974,10 +974,14 @@ def _detail(value: Mapping[str, Any]) -> PriceLimitEventDetailRecord:
         "direction": value["direction"],
         "sectors": [],
         "limit_up_reasons": [],
+        "seal_ratio": None,
     }
     for name in PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_ORDER:
         if name not in value:
-            raise RemoteStoreError(f"明细记录缺少 {name}。", code="INCOMPLETE_RESPONSE")
+            payload[name] = None
+            continue
+        if name not in value:
+            continue
         if name == "is_leader":
             leader = value[name]
             if leader is not None and type(leader) is not bool:
@@ -988,8 +992,20 @@ def _detail(value: Mapping[str, Any]) -> PriceLimitEventDetailRecord:
             if note is not None and type(note) is not str:
                 raise RemoteStoreError("note 必须为字符串或 null。", code="INCOMPLETE_RESPONSE")
             payload[name] = note
+        elif name == "first_limit_time":
+            limit_time = value[name]
+            if limit_time is not None and type(limit_time) is not str:
+                raise RemoteStoreError(
+                    "first_limit_time 必须为字符串或 null。",
+                    code="INCOMPLETE_RESPONSE",
+                )
+            payload[name] = limit_time
         else:
             payload[name] = _optional_number(name, value[name])
+    seal_amount = payload.get("seal_amount")
+    turnover_amount = payload.get("turnover_amount")
+    if seal_amount is not None and turnover_amount is not None and turnover_amount > 0:
+        payload["seal_ratio"] = seal_amount / turnover_amount
     return PriceLimitEventDetailRecord(**payload)
 
 
@@ -1010,6 +1026,11 @@ def _empty_detail(
         open_price=None,
         turnover_amount=None,
         turnover_rate=None,
+        seal_amount=None,
+        seal_ratio=None,
+        first_limit_time=None,
+        close_price=None,
+        stock_float_market_cap=None,
         is_leader=None,
         note=None,
         sectors=[],

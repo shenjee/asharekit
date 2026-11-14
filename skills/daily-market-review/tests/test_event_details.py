@@ -504,9 +504,44 @@ class TestPriceLimitEventDetails(unittest.TestCase):
         self.assertEqual(record.sectors, ["白酒", "消费"])
         self.assertIs(record.is_leader, True)
 
-    def test_derived_fields_cannot_be_written(self) -> None:
+    def test_limit_up_strength_fields(self) -> None:
         self._save_parent()
-        with self.assertRaises(InvalidFieldValueError) as ctx:
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": 100_000_000,
+                    "seal_amount": 40_000_000,
+                    "first_limit_time": "9:25",
+                    "close_price": 13,
+                    "stock_float_market_cap": 1_130_100_000,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertEqual(record.seal_amount, 40_000_000.0)
+        self.assertEqual(record.seal_ratio, 0.4)
+        self.assertEqual(record.first_limit_time, "09:25:00")
+        self.assertEqual(record.close_price, 13.0)
+        self.assertEqual(record.stock_float_market_cap, 1_130_100_000.0)
+
+        self._save_parent(direction="down", closed_at_limit=True, streak_height=0)
+        with self.assertRaises(InvalidFieldValueError):
+            self.repo.save_price_limit_event_details(
+                "2026-08-21",
+                [
+                    {
+                        "market": "sh",
+                        "code": "600519",
+                        "direction": "down",
+                        "first_limit_time": "09:30:00",
+                    }
+                ],
+            )
+        with self.assertRaises(InvalidFieldValueError):
             self.repo.save_price_limit_event_details(
                 "2026-08-21",
                 [
@@ -514,11 +549,150 @@ class TestPriceLimitEventDetails(unittest.TestCase):
                         "market": "sh",
                         "code": "600519",
                         "direction": "up",
-                        "auction_ratio": 0.1,
+                        "first_limit_time": "09:24:59",
                     }
                 ],
             )
-        self.assertIn("auction_ratio", str(ctx.exception))
+        with self.assertRaises(InvalidFieldValueError):
+            self.repo.save_price_limit_event_details(
+                "2026-08-21",
+                [
+                    {
+                        "market": "sh",
+                        "code": "600519",
+                        "direction": "up",
+                        "close_price": 0,
+                    }
+                ],
+            )
+
+    def test_seal_ratio_derived(self) -> None:
+        self._save_parent()
+        # seal_amount 和 turnover_amount 都有值，seal_ratio 自动计算
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": 100_000_000,
+                    "seal_amount": 40_000_000,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertEqual(record.seal_amount, 40_000_000.0)
+        self.assertEqual(record.seal_ratio, 0.4)
+
+        # seal_amount 缺失时，seal_ratio 为 null
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": 100_000_000,
+                    "seal_amount": None,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertIsNone(record.seal_ratio)
+
+        # turnover_amount 为 0 时，seal_ratio 为 null
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": 0,
+                    "seal_amount": 40_000_000,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertIsNone(record.seal_ratio)
+
+        # 只写 seal_amount 不带 turnover_amount 允许，seal_ratio 为 null
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": None,
+                    "seal_amount": 40_000_000,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertEqual(record.seal_amount, 40_000_000.0)
+        self.assertIsNone(record.seal_ratio)
+
+        # 库里已有 turnover_amount，补丁只改 seal_amount，seal_ratio 按公式算出
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "turnover_amount": 100_000_000,
+                }
+            ],
+        )
+        self.repo.save_price_limit_event_details(
+            "2026-08-21",
+            [
+                {
+                    "market": "sh",
+                    "code": "600519",
+                    "direction": "up",
+                    "seal_amount": 20_000_000,
+                }
+            ],
+        )
+        record = self._get_one()
+        self.assertEqual(record.seal_ratio, 0.2)
+
+        # 直接写入 seal_ratio 被拒绝（派生字段）
+        with self.assertRaises(InvalidFieldValueError):
+            self.repo.save_price_limit_event_details(
+                "2026-08-21",
+                [
+                    {
+                        "market": "sh",
+                        "code": "600519",
+                        "direction": "up",
+                        "turnover_amount": 100_000_000,
+                        "seal_ratio": 0.4,
+                    }
+                ],
+            )
+
+    def test_derived_fields_cannot_be_written(self) -> None:
+        self._save_parent()
+        for derived in ("auction_ratio", "open_change", "seal_ratio"):
+            with self.subTest(derived=derived):
+                with self.assertRaises(InvalidFieldValueError) as ctx:
+                    self.repo.save_price_limit_event_details(
+                        "2026-08-21",
+                        [
+                            {
+                                "market": "sh",
+                                "code": "600519",
+                                "direction": "up",
+                                derived: 0.1,
+                            }
+                        ],
+                    )
+                self.assertIn(derived, str(ctx.exception))
+                self.assertIn("派生字段", str(ctx.exception))
 
 
 if __name__ == "__main__":

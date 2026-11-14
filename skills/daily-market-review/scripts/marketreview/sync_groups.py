@@ -28,6 +28,9 @@ DETAIL_FLOAT_FIELDS = (
     "open_price",
     "turnover_amount",
     "turnover_rate",
+    "seal_amount",
+    "close_price",
+    "stock_float_market_cap",
 )
 DOUBLE_PRECISION_FIELDS = FLOAT_REVIEW_FIELDS | frozenset(DETAIL_FLOAT_FIELDS)
 AUDIT_FIELDS = frozenset({"created_at", "updated_at"})
@@ -400,7 +403,8 @@ def read_local_groups(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             """
             SELECT trade_date, market, code, direction,
                    previous_turnover_amount, auction_amount, previous_close, open_price,
-                   turnover_amount, turnover_rate, is_leader, note, created_at, updated_at
+                   turnover_amount, turnover_rate, seal_amount, first_limit_time,
+                   close_price, stock_float_market_cap, is_leader, note, created_at, updated_at
             FROM daily_price_limit_event_detail
             """
         )
@@ -556,7 +560,7 @@ def _review_from_mapping(row: Mapping[str, Any]) -> dict[str, Any]:
 def _detail_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for name in DETAIL_FLOAT_FIELDS:
-        value = row[name]
+        value = row.get(name)
         if value is None:
             payload[name] = None
         elif type(value) is bool or type(value) not in {int, float}:
@@ -572,6 +576,10 @@ def _detail_payload(row: Mapping[str, Any]) -> dict[str, Any]:
         payload["is_leader"] = bool(leader)
     else:
         raise RemoteStoreError("明细 is_leader 不合法。", code="INCOMPLETE_RESPONSE")
+    limit_time = row.get("first_limit_time")
+    if limit_time is not None and type(limit_time) is not str:
+        raise RemoteStoreError("明细 first_limit_time 不合法。", code="INCOMPLETE_RESPONSE")
+    payload["first_limit_time"] = limit_time
     payload["note"] = row["note"]
     payload["created_at"] = row["created_at"]
     payload["updated_at"] = row["updated_at"]

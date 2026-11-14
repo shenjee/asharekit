@@ -12,7 +12,7 @@ asharekit/
 ├── LICENSE
 ├── .github/workflows/tests.yml
 └── skills/
-    ├── daily-market-review/     # 每日市场复盘，当前 0.4.3
+    ├── daily-market-review/     # 每日市场复盘，当前 0.5.0
     └── streak-picker/           # 连板选股，当前 0.0.1
 ```
 
@@ -35,7 +35,7 @@ asharekit/
 
 ### daily-market-review
 
-当前发布版本是 **0.4.3**。从 [Releases](https://github.com/shenjee/asharekit/releases) 下载 `daily-market-review-vX.Y.Z.zip`。安装步骤、云端配置和升级说明在版本包内的 README；源码里的同一份见 [skills/daily-market-review/README.md](skills/daily-market-review/README.md)。
+当前发布版本是 **0.5.0**。从 [Releases](https://github.com/shenjee/asharekit/releases) 下载 `daily-market-review-vX.Y.Z.zip`。安装步骤、云端配置和升级说明在版本包内的 README；源码里的同一份见 [skills/daily-market-review/README.md](skills/daily-market-review/README.md)。
 
 ### streak-picker
 

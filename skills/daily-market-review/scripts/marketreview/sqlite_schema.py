@@ -73,6 +73,10 @@ DDL_DAILY_PRICE_LIMIT_EVENT_DETAIL = """
         open_price REAL,
         turnover_amount REAL,
         turnover_rate REAL,
+        seal_amount REAL,
+        first_limit_time TEXT,
+        close_price REAL,
+        stock_float_market_cap REAL,
         is_leader INTEGER,
         note TEXT,
         created_at TEXT NOT NULL,
@@ -261,6 +265,26 @@ def connect(db_path: PathLike) -> sqlite3.Connection:
         raise
 
 
+_DETAIL_STRENGTH_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("seal_amount", "REAL"),
+    ("first_limit_time", "TEXT"),
+    ("close_price", "REAL"),
+    ("stock_float_market_cap", "REAL"),
+)
+
+
+def _ensure_detail_strength_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(daily_price_limit_event_detail)")
+    }
+    for name, column_type in _DETAIL_STRENGTH_COLUMNS:
+        if name not in existing:
+            conn.execute(
+                f"ALTER TABLE daily_price_limit_event_detail ADD COLUMN {name} {column_type}"
+            )
+
+
 def init_db(db_path: PathLike) -> sqlite3.Connection:
     owns_connection = not isinstance(db_path, sqlite3.Connection)
     path_label: Path | str
@@ -274,6 +298,7 @@ def init_db(db_path: PathLike) -> sqlite3.Connection:
         with review_transaction(conn):
             for statement in DDL_STATEMENTS:
                 conn.execute(statement)
+            _ensure_detail_strength_columns(conn)
     except (OSError, sqlite3.OperationalError) as exc:
         if owns_connection:
             conn.close()

@@ -33,6 +33,7 @@ MIGRATIONS = [
     ROOT / "sql" / "migrations" / "0002_marketreview_v1_rpc.sql",
     ROOT / "sql" / "migrations" / "0003_marketreview_v1_sync.sql",
     ROOT / "sql" / "migrations" / "0005_median_change_pct_scale.sql",
+    ROOT / "sql" / "migrations" / "0006_limit_up_strength.sql",
 ]
 CONTAINER = "dmr-pg-rpc-v1"
 DATABASE = "marketreview_v1_test"
@@ -1035,6 +1036,10 @@ class PostgresRpcTest(unittest.TestCase):
                         "open_price": None,
                         "turnover_amount": None,
                         "turnover_rate": None,
+                        "seal_amount": None,
+                        "first_limit_time": None,
+                        "close_price": None,
+                        "stock_float_market_cap": None,
                         "is_leader": None,
                         "note": None,
                         "created_at": BATCH,

@@ -59,6 +59,10 @@ PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_NAMES: frozenset[str] = frozenset(
         "open_price",
         "turnover_amount",
         "turnover_rate",
+        "seal_amount",
+        "first_limit_time",
+        "close_price",
+        "stock_float_market_cap",
         "is_leader",
         "note",
     }
@@ -70,6 +74,10 @@ PRICE_LIMIT_EVENT_DETAIL_SCALAR_FIELD_ORDER: tuple[str, ...] = (
     "open_price",
     "turnover_amount",
     "turnover_rate",
+    "seal_amount",
+    "first_limit_time",
+    "close_price",
+    "stock_float_market_cap",
     "is_leader",
     "note",
 )
@@ -77,7 +85,7 @@ PRICE_LIMIT_EVENT_DETAIL_LIST_FIELD_NAMES: frozenset[str] = frozenset(
     {"sectors", "limit_up_reasons"}
 )
 PRICE_LIMIT_EVENT_DETAIL_DERIVED_FIELD_NAMES: frozenset[str] = frozenset(
-    {"auction_ratio", "open_change"}
+    {"auction_ratio", "open_change", "seal_ratio"}
 )
 PRICE_LIMIT_EVENT_DETAIL_IGNORED_FIELDS: frozenset[str] = frozenset(
     {"trade_date", "created_at", "updated_at"}
@@ -97,6 +105,10 @@ DETAIL_SELECT_COLUMNS: tuple[str, ...] = (
     "open_price",
     "turnover_amount",
     "turnover_rate",
+    "seal_amount",
+    "first_limit_time",
+    "close_price",
+    "stock_float_market_cap",
     "is_leader",
     "note",
 )
@@ -137,6 +149,10 @@ class PriceLimitEventDetailPatch:
     open_price: float | None = None
     turnover_amount: float | None = None
     turnover_rate: float | None = None
+    seal_amount: float | None = None
+    first_limit_time: str | None = None
+    close_price: float | None = None
+    stock_float_market_cap: float | None = None
     is_leader: bool | None = None
     note: str | None = None
     sectors: tuple[str, ...] | None = None
@@ -158,6 +174,11 @@ class PriceLimitEventDetailRecord:
     open_price: float | None
     turnover_amount: float | None
     turnover_rate: float | None
+    seal_amount: float | None
+    seal_ratio: float | None
+    first_limit_time: str | None
+    close_price: float | None
+    stock_float_market_cap: float | None
     is_leader: bool | None
     note: str | None
     sectors: list[str]
@@ -181,6 +202,11 @@ class LadderStock:
     open_price: float | None
     turnover_amount: float | None
     turnover_rate: float | None
+    seal_amount: float | None
+    seal_ratio: float | None
+    first_limit_time: str | None
+    close_price: float | None
+    stock_float_market_cap: float | None
     is_leader: bool | None
     note: str | None
     auction_ratio: float | None

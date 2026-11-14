@@ -14,6 +14,17 @@ from .schema import (
 )
 
 
+def compute_seal_ratio(
+    seal_amount: float | None,
+    turnover_amount: float | None,
+) -> float | None:
+    if seal_amount is None or turnover_amount is None:
+        return None
+    if turnover_amount == 0:
+        return None
+    return seal_amount / turnover_amount
+
+
 def compute_auction_ratio(
     auction_amount: float | None,
     previous_turnover_amount: float | None,
@@ -64,6 +75,14 @@ def _to_ladder_stock(
         open_price=detail.open_price if detail is not None else None,
         turnover_amount=detail.turnover_amount if detail is not None else None,
         turnover_rate=detail.turnover_rate if detail is not None else None,
+        seal_amount=detail.seal_amount if detail is not None else None,
+        seal_ratio=compute_seal_ratio(
+            detail.seal_amount if detail is not None else None,
+            detail.turnover_amount if detail is not None else None,
+        ),
+        first_limit_time=detail.first_limit_time if detail is not None else None,
+        close_price=detail.close_price if detail is not None else None,
+        stock_float_market_cap=detail.stock_float_market_cap if detail is not None else None,
         is_leader=detail.is_leader if detail is not None else None,
         note=detail.note if detail is not None else None,
         auction_ratio=compute_auction_ratio(
@@ -83,35 +102,31 @@ def _sorted_stocks(stocks: Sequence[LadderStock]) -> list[LadderStock]:
 
 def build_ladder(
     events: Sequence[PriceLimitEventRecord],
-    details: Sequence[PriceLimitEventDetailRecord] = (),
+    details: Sequence[PriceLimitEventDetailRecord] | None = None,
 ) -> LadderView:
-    lookup = _detail_map(details)
-    groups_by_height: dict[int, list[LadderStock]] = {}
+    detail_map = _detail_map(details or [])
+    grouped: dict[int, list[LadderStock]] = {}
     broken_limit_up: list[LadderStock] = []
     opened_limit_down: list[LadderStock] = []
     closed_limit_down: list[LadderStock] = []
-
     for event in events:
-        stock = _to_ladder_stock(
-            event,
-            lookup.get((event.market, event.code, event.direction)),
-        )
+        detail = detail_map.get((event.market, event.code, event.direction))
+        stock = _to_ladder_stock(event, detail)
         if event.direction == "up" and event.closed_at_limit and event.streak_height >= 1:
-            groups_by_height.setdefault(event.streak_height, []).append(stock)
+            grouped.setdefault(event.streak_height, []).append(stock)
         elif event.direction == "up" and not event.closed_at_limit:
             broken_limit_up.append(stock)
-        elif event.direction == "down" and not event.closed_at_limit:
-            opened_limit_down.append(stock)
         elif event.direction == "down" and event.closed_at_limit:
             closed_limit_down.append(stock)
-
+        elif event.direction == "down" and not event.closed_at_limit:
+            opened_limit_down.append(stock)
     groups = [
         LadderGroup(
             streak_height=height,
-            count=len(groups_by_height[height]),
-            stocks=_sorted_stocks(groups_by_height[height]),
+            count=len(stocks),
+            stocks=_sorted_stocks(stocks),
         )
-        for height in sorted(groups_by_height, reverse=True)
+        for height, stocks in sorted(grouped.items(), key=lambda item: -item[0])
     ]
     return LadderView(
         groups=groups,
@@ -122,4 +137,16 @@ def build_ladder(
 
 
 def ladder_to_dict(ladder: LadderView) -> dict[str, Any]:
-    return asdict(ladder)
+    return {
+        "groups": [
+            {
+                "streak_height": group.streak_height,
+                "count": group.count,
+                "stocks": [asdict(stock) for stock in group.stocks],
+            }
+            for group in ladder.groups
+        ],
+        "broken_limit_up": [asdict(stock) for stock in ladder.broken_limit_up],
+        "opened_limit_down": [asdict(stock) for stock in ladder.opened_limit_down],
+        "closed_limit_down": [asdict(stock) for stock in ladder.closed_limit_down],
+    }
