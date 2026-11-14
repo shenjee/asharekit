@@ -53,9 +53,10 @@ EOF
 
 ```bash
 python3 -m unittest discover -s skills/daily-market-review/tests -p 'test_*.py'
+python3 -m unittest discover -s skills/streak-picker/tests -p 'test_*.py'
 ```
 
-GitHub Actions（仓库根目录 `.github/workflows/tests.yml`）跑同一条命令。流水线自建隔离 PostgreSQL，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
+GitHub Actions（仓库根目录 `.github/workflows/tests.yml`）按同样顺序跑这两条命令。复盘测试用到的隔离 PostgreSQL 由流水线自建，用 trust 本机连接，不读取 Secret、数据库密码或 `~/.marketreview`。
 
 ## 发布包内容
 
