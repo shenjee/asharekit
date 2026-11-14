@@ -13,6 +13,7 @@ ROW1_PRICE_LIMIT = 30
 ROW1_CAP_LIMIT = 10_000_000_000
 ROW1_LIMIT_RATE_BP = 1000
 STRONG_SECTOR_LIMIT = 3
+ROW_DISPLAY_LIMIT = 3
 
 STATUS_OK = "ok"
 STATUS_NO_RECORD = "no_record"
@@ -56,24 +57,24 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
         return _empty(STATUS_NO_CLOSED_LIMIT_UP, MESSAGE_NO_CLOSED_LIMIT_UP)
 
     strong = _strong_sectors(stocks)
-    row1 = [_candidate_row(stock, missing=[], unmet=[]) for stock in _row_sorted(_row1(stocks))]
-    row2 = [
+    row1_all = [_candidate_row(stock, missing=[], unmet=[]) for stock in _row_sorted(_row1(stocks))]
+    row2_all = [
         _candidate_row(stock, missing=[], unmet=unmet)
         for stock, unmet in _row2(stocks)
     ]
-    unclassified = [
+    unclassified_all = [
         _candidate_row(stock, missing=missing, unmet=[])
         for stock, missing in _unclassified_rows(stocks)
     ]
-    has_classified_rows = bool(row1 or row2)
+    has_classified_rows = bool(row1_all or row2_all)
     status = STATUS_OK
     message = None
     if not any(item["streak_height"] in (1, 2) for item in stocks):
         status = STATUS_NO_ROW_CANDIDATES
         message = MESSAGE_NO_ROW_CANDIDATES
-    elif not has_classified_rows and unclassified:
+    elif not has_classified_rows and unclassified_all:
         status = STATUS_UNCLASSIFIABLE_ROWS
-        message = _unclassifiable_message(unclassified)
+        message = _unclassifiable_message(unclassified_all)
     return {
         "status": status,
         "message": message,
@@ -88,9 +89,13 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
                 _intraday_row(item["theme"], item["stocks"]) for item in strong
             ],
         },
-        "row1": row1,
-        "row2": row2,
-        "unclassified_rows": unclassified,
+        "row1": row1_all[:ROW_DISPLAY_LIMIT],
+        "row1_total": len(row1_all),
+        "row2": row2_all[:ROW_DISPLAY_LIMIT],
+        "row2_total": len(row2_all),
+        "unclassified_rows": unclassified_all[:ROW_DISPLAY_LIMIT],
+        "unclassified_total": len(unclassified_all),
+        "row_display_limit": ROW_DISPLAY_LIMIT,
     }
 
 
@@ -101,8 +106,12 @@ def _empty(status: str, message: str) -> dict[str, Any]:
         "strong_sectors": [],
         "leaders": {"market": None, "sectors": [], "intraday": []},
         "row1": [],
+        "row1_total": 0,
         "row2": [],
+        "row2_total": 0,
         "unclassified_rows": [],
+        "unclassified_total": 0,
+        "row_display_limit": ROW_DISPLAY_LIMIT,
     }
 
 
@@ -411,7 +420,21 @@ def _row_split(stock: dict[str, Any]) -> tuple[list[str], list[str]] | tuple[Non
 
 
 def _row_sorted(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(stocks, key=lambda item: (-item["streak_height"], item["market"], item["code"]))
+    # 强弱排序：先连板高度，再套龙头业务键。截断取前排和输出行序都用它。
+    return sorted(
+        stocks,
+        key=lambda item: (
+            -item["streak_height"],
+            item["first_limit_time"] is None,
+            item["first_limit_time"] or "",
+            item["seal_ratio"] is None,
+            -(item["seal_ratio"] or 0),
+            item["seal_amount"] is None,
+            -(item["seal_amount"] or 0),
+            item["market"],
+            item["code"],
+        ),
+    )
 
 
 def _candidate_row(

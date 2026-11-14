@@ -90,11 +90,15 @@ class MixedFixtureTest(unittest.TestCase):
         )
         self.assertTrue(all(item["market"] and item["code"] for item in result["leaders"]["sectors"]))
 
-        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "600099", "000010"])
-        self.assertEqual([item["code"] for item in result["row2"]], ["000001", "300001"])
-        self.assertEqual(result["row2"][0]["unmet"], ["收盘价不低于30元"])
-        self.assertEqual(result["row2"][1]["unmet"], ["涨停限幅不是10%"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "000010"])
+        self.assertEqual(result["row1_total"], 4)
+        self.assertEqual([item["code"] for item in result["row2"]], ["300001", "000001"])
+        self.assertEqual(result["row2_total"], 2)
+        self.assertEqual(result["row2"][0]["unmet"], ["涨停限幅不是10%"])
+        self.assertEqual(result["row2"][1]["unmet"], ["收盘价不低于30元"])
         self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600003"])
+        self.assertEqual(result["unclassified_total"], 1)
+        self.assertEqual(result["row_display_limit"], 3)
         self.assertEqual(result["unclassified_rows"][0]["missing_fields"], ["stock_float_market_cap"])
         self.assertIn("数据缺失：个股流通市值", result["unclassified_rows"][0]["basis"])
         self.assertIn("40.00%", result["leaders"]["market"]["basis"])
@@ -368,6 +372,44 @@ class MissingRowDataTest(unittest.TestCase):
         self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
         self.assertEqual([item["code"] for item in result["row2"]], ["600002"])
         self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600003"])
+
+
+class RowDisplayLimitTest(unittest.TestCase):
+    def test_row1_is_capped_at_three_by_strength_order(self) -> None:
+        stocks = [
+            _stock(code=f"60000{index}", name=f"首板{index}", first_limit_time=f"09:3{index}:00")
+            for index in range(5)
+        ]
+        stocks.append(_stock(code="600010", name="二板", streak_height=2, first_limit_time="14:00:00"))
+        result = pick(_data(stocks))
+        self.assertEqual(result["row1_total"], 6)
+        self.assertEqual(len(result["row1"]), 3)
+        # 二板优先，再按首次涨停时间取前 3
+        self.assertEqual(
+            [item["code"] for item in result["row1"]],
+            ["600010", "600000", "600001"],
+        )
+
+    def test_row2_and_unclassified_are_capped_and_report_totals(self) -> None:
+        row2_stocks = [
+            _stock(code=f"60001{index}", name=f"二排{index}", close_price=35, first_limit_time=f"10:0{index}:00")
+            for index in range(5)
+        ]
+        unclassified_stocks = [
+            _stock(code=f"60002{index}", name=f"缺值{index}", close_price=None, first_limit_time=f"11:0{index}:00")
+            for index in range(5)
+        ]
+        result = pick(_data(row2_stocks + unclassified_stocks))
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["row2_total"], 5)
+        self.assertEqual(len(result["row2"]), 3)
+        self.assertEqual([item["code"] for item in result["row2"]], ["600010", "600011", "600012"])
+        self.assertEqual(result["unclassified_total"], 5)
+        self.assertEqual(len(result["unclassified_rows"]), 3)
+        self.assertEqual(
+            [item["code"] for item in result["unclassified_rows"]],
+            ["600020", "600021", "600022"],
+        )
 
 
 class CliTest(unittest.TestCase):
