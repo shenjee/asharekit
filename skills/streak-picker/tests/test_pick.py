@@ -38,7 +38,7 @@ def _stock(**overrides: object) -> dict:
         "closed_at_limit": True,
         "limit_rate_bp": 1000,
         "streak_height": 1,
-        "limit_up_reasons": ["题材"],
+        "sectors": ["题材"],
         "first_limit_time": "10:00:00",
         "seal_ratio": 0.2,
         "seal_amount": 10_000_000,
@@ -207,12 +207,27 @@ class TieBreakTest(unittest.TestCase):
         self.assertEqual(result["leaders"]["market"]["code"], "600000")
 
     def test_fewer_than_three_themes_are_all_listed(self) -> None:
-        result = pick(_data([_stock(limit_up_reasons=["只有一个"])]))
+        result = pick(_data([_stock(sectors=["只有一个"])]))
         self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["只有一个"])
+
+    def test_empty_sectors_skip_grouping_but_join_leaders_and_rows(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="有板块", sectors=["有板块"], streak_height=2),
+                    _stock(code="600002", name="无板块", sectors=[], streak_height=5),
+                    _stock(code="600003", name="null板块", sectors=None, streak_height=1),
+                ]
+            )
+        )
+        self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["有板块"])
+        self.assertEqual(result["leaders"]["market"]["code"], "600002")
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001", "600003"])
+        self.assertEqual(result["status"], "ok")
 
     def test_identical_sector_keys_break_by_unicode_code_point(self) -> None:
         stocks = [
-            _stock(code=f"60000{index}", name=theme, limit_up_reasons=[theme], first_limit_time="09:30:00", seal_amount=100)
+            _stock(code=f"60000{index}", name=theme, sectors=[theme], first_limit_time="09:30:00", seal_amount=100)
             for index, theme in enumerate("甲乙丙丁")
         ]
         result = pick(_data(stocks))
@@ -222,8 +237,8 @@ class TieBreakTest(unittest.TestCase):
         result = pick(
             _data(
                 [
-                    _stock(code="600001", limit_up_reasons=["有时间"], first_limit_time="10:00:00", seal_amount=None),
-                    _stock(code="600002", limit_up_reasons=["无时间"], first_limit_time=None, seal_amount=999),
+                    _stock(code="600001", sectors=["有时间"], first_limit_time="10:00:00", seal_amount=None),
+                    _stock(code="600002", sectors=["无时间"], first_limit_time=None, seal_amount=999),
                 ]
             )
         )
@@ -232,8 +247,8 @@ class TieBreakTest(unittest.TestCase):
         result = pick(
             _data(
                 [
-                    _stock(code="600001", limit_up_reasons=["有封单"], first_limit_time="10:00:00", seal_amount=1),
-                    _stock(code="600002", limit_up_reasons=["无封单"], first_limit_time="10:00:00", seal_amount=None),
+                    _stock(code="600001", sectors=["有封单"], first_limit_time="10:00:00", seal_amount=1),
+                    _stock(code="600002", sectors=["无封单"], first_limit_time="10:00:00", seal_amount=None),
                 ]
             )
         )
@@ -243,8 +258,8 @@ class TieBreakTest(unittest.TestCase):
         result = pick(
             _data(
                 [
-                    _stock(code="600001", limit_up_reasons=["机器人", "机器人"]),
-                    _stock(code="600002", limit_up_reasons=["机器人", "算力"]),
+                    _stock(code="600001", sectors=["机器人", "机器人"]),
+                    _stock(code="600002", sectors=["机器人", "算力"]),
                 ]
             )
         )
@@ -255,10 +270,10 @@ class TieBreakTest(unittest.TestCase):
         result = pick(
             _data(
                 [
-                    _stock(code="600001", limit_up_reasons=["部分缺"], first_limit_time="09:30:00", seal_amount=100_000_000),
-                    _stock(code="600002", limit_up_reasons=["部分缺"], first_limit_time="10:00:00", seal_amount=None),
-                    _stock(code="600003", limit_up_reasons=["全部有"], first_limit_time="09:30:00", seal_amount=90_000_000),
-                    _stock(code="600004", limit_up_reasons=["全部有"], first_limit_time="10:00:00", seal_amount=90_000_000),
+                    _stock(code="600001", sectors=["部分缺"], first_limit_time="09:30:00", seal_amount=100_000_000),
+                    _stock(code="600002", sectors=["部分缺"], first_limit_time="10:00:00", seal_amount=None),
+                    _stock(code="600003", sectors=["全部有"], first_limit_time="09:30:00", seal_amount=90_000_000),
+                    _stock(code="600004", sectors=["全部有"], first_limit_time="10:00:00", seal_amount=90_000_000),
                 ]
             )
         )
@@ -268,7 +283,7 @@ class TieBreakTest(unittest.TestCase):
 
     def test_invalid_reasons_type_is_an_error(self) -> None:
         with self.assertRaises(PickError):
-            pick(_data([_stock(limit_up_reasons=0)]))
+            pick(_data([_stock(sectors=0)]))
 
     def test_non_finite_numbers_are_rejected(self) -> None:
         for bad in (float("nan"), float("inf"), float("-inf")):

@@ -140,6 +140,34 @@ def cmd_save_event_details(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_enrich_events(args: argparse.Namespace) -> int:
+    from marketreview.enrich import enrich_events
+    from marketreview.sources.eastmoney import EastMoneyLimitPoolClient, EastMoneyPoolError
+
+    guard = default_write_guard()
+    trade_date = guard.validate_write_trade_date(args.date)
+    try:
+        zt_pool = EastMoneyLimitPoolClient.fetch_zt_pool(trade_date)
+        zb_pool = EastMoneyLimitPoolClient.fetch_zb_pool(trade_date)
+    except EastMoneyPoolError as exc:
+        _failure(str(exc), code="SOURCE_UNAVAILABLE")
+        return 1
+    with open_repository(
+        backend=args.backend,
+        db_path=args.db,
+        state_dir=getattr(args, "state_dir", None),
+    ) as repo:
+        report = enrich_events(
+            repo,
+            trade_date,
+            zt_pool=zt_pool,
+            zb_pool=zb_pool,
+            dry_run=args.dry_run,
+        )
+    _success(report)
+    return 0
+
+
 def cmd_delete_event(args: argparse.Namespace) -> int:
     guard = default_write_guard()
     trade_date = guard.validate_write_trade_date(args.date)
@@ -311,6 +339,14 @@ def build_parser() -> argparse.ArgumentParser:
     save_event_details_parser.add_argument("--date", required=True)
     save_event_details_parser.add_argument("--input", default="-")
     save_event_details_parser.set_defaults(func=cmd_save_event_details)
+
+    enrich_events_parser = subparsers.add_parser(
+        "enrich-events",
+        help="用东方财富涨停/炸板股池补齐当日事件明细与 sectors（只补缺，不覆盖人工值）",
+    )
+    enrich_events_parser.add_argument("--date", required=True)
+    enrich_events_parser.add_argument("--dry-run", action="store_true", help="只生成补缺报告，不写库")
+    enrich_events_parser.set_defaults(func=cmd_enrich_events)
 
     delete_event_parser = subparsers.add_parser("delete-event", help="Delete one event")
     delete_event_parser.add_argument("--date", required=True)
