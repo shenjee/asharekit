@@ -72,14 +72,14 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 `pick` 只取 `ladder.groups` 里的股票：`direction=up`、`closed_at_limit=true`、`streak_height>=1` 的收盘涨停。炸板（`broken_limit_up`）、打开跌停和收盘跌停都不参与归类、排序和筛选。
 
-`get` 成功之后先看 `pick` 的 `status`，三种空结果分开说：
+`get` 成功之后按 `pick` 的 `status` 分别处理：
 
 | `status` | 条件 | 回复 |
 | --- | --- | --- |
 | `no_record` | `review` 为 `null` 且 `events` 为空 | 库内无记录。停止 |
 | `no_closed_limit_up` | `ladder.groups` 为空，但 `review` 已有记录，或 `events` 非空 | 库内无收盘涨停事件。停止 |
 | `no_row_candidates` | 候选池非空，但没有首板或二板（全部三板及以上） | 一排和二排留空，说明「候选池内没有首板或二板」。强势板块和龙头照常输出 |
-| `unclassifiable_rows` | 有首板或二板，但一只都判定不了（三项判定字段任一整列缺失） | 一排和二排留空，按 `message` 说明缺失的字段和只数。强势板块和龙头照常输出 |
+| `unclassifiable_rows` | 有首板或二板，但每只都至少缺一个判定字段，一只都分不了排（不要求缺的是同一个字段） | 一排和二排留空，按 `message` 说明缺失的字段和只数。强势板块和龙头照常输出 |
 | `ok` | 候选池非空，且至少有一只首板或二板可以判定 | 按输出规则渲染三张表；`unclassified_rows` 里的股票单独列出 |
 
 `no_closed_limit_up` 只说明库内没有收盘涨停事件。有炸板或跌停事件时仍然用这一句。
