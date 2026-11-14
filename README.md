@@ -13,7 +13,7 @@ asharekit/
 ├── .github/workflows/tests.yml
 └── skills/
     ├── daily-market-review/     # 每日市场复盘，当前 0.5.0
-    └── streak-picker/           # 连板选股，当前 0.0.1
+    └── streak-picker/           # 连板选股，当前 0.1.0
 ```
 
 每个 skill 自己有版本号、`SKILL.md` 和发布包。改选股规则不升复盘的数据库版本。
@@ -23,7 +23,7 @@ asharekit/
 | 做什么 | 采集、校验、保存、展示已收盘日的涨跌停、连板高度、每日梯队、市场宽度、两融、指数、成交额、市值与估值 | 从已保存的连板里筛选、排序，给出候选和命中依据 |
 | 数据 | 拥有复盘账本。默认 Supabase，显式 `--backend sqlite` 使用本地库 | 只读复盘 skill 的 `get`。不写复盘库。选股结果不进 `market_review` 的表 |
 | 触发 | 保存、补齐、修正、查看复盘和梯队 | 选股、筛选、哪些连板值得看 |
-| 发布包 | `daily-market-review-vX.Y.Z.zip`，解压后根目录是 `daily-market-review/SKILL.md` | 规则发布后再打 `streak-picker-vX.Y.Z.zip` |
+| 发布包 | `daily-market-review-vX.Y.Z.zip`，解压后根目录是 `daily-market-review/SKILL.md` | `streak-picker-vX.Y.Z.zip` |
 
 两边都给出事实或候选依据，不写买卖指令。市场事实补进复盘 skill 的事件字段。排序和过滤规则留在 `streak-picker`。
 
@@ -39,7 +39,7 @@ asharekit/
 
 ### streak-picker
 
-当前版本是 **0.0.1**，只写了边界，选股规则还没有发布，所以没有版本包，也不能安装。说明见 [skills/streak-picker/README.md](skills/streak-picker/README.md)。规则发布并上传 `streak-picker-vX.Y.Z.zip` 之后，才按同一个办法安装。
+当前版本是 **0.1.0**，选股规则已落盘（强势板块、总龙头 / 板块龙头 / 日内龙头、一排 / 二排，见 [skills/streak-picker/README.md](skills/streak-picker/README.md)）。版本包 `streak-picker-vX.Y.Z.zip` 上传到 Releases 之后，按与复盘 skill 相同的办法安装；它依赖已安装的 daily-market-review 版本包。
 
 ## 两个 skill 怎么配合
 
