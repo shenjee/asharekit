@@ -149,6 +149,35 @@ class TieBreakTest(unittest.TestCase):
             [("sh", "600010"), ("sz", "000002")],
         )
 
+    def test_missing_business_keys_basis_states_all_missing(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(market="sz", code="000002", name="日出东方", streak_height=5, first_limit_time=None, seal_ratio=None, seal_amount=None),
+                    _stock(market="sh", code="600327", name="大东方", streak_height=5, first_limit_time=None, seal_ratio=None, seal_amount=None),
+                ]
+            )
+        )
+        leader = result["leaders"]["market"]
+        self.assertEqual((leader["market"], leader["code"]), ("sh", "600327"))
+        self.assertEqual(
+            leader["basis"],
+            "5板，首次涨停时间、封成比、封单额均缺失；按 market/code 顺序展示，其余同高度股票为 sz 000002 日出东方",
+        )
+
+    def test_partially_missing_keys_keep_comparison_wording(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600002", name="有时间", streak_height=5, first_limit_time="09:30:00", seal_ratio=None, seal_amount=None),
+                    _stock(code="600001", name="缺时间", streak_height=5, first_limit_time=None, seal_ratio=None, seal_amount=None),
+                ]
+            )
+        )
+        leader = result["leaders"]["market"]
+        self.assertEqual(leader["code"], "600002")
+        self.assertIn("按首次涨停时间、封成比、封单额、market、code 取本只", leader["basis"])
+
     def test_intraday_leader_uses_seal_ratio_when_time_ties(self) -> None:
         result = pick(
             _data(

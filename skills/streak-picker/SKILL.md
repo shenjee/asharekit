@@ -96,7 +96,7 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 ### 2. 龙头（三类，分别列出）
 
-并列排序键统一为：首次涨停时间（`first_limit_time`，早者优先）→ 封成比（`seal_ratio`，大者优先）→ 封单额（`seal_amount`，大者优先）→ `market` 升序 → `code` 升序。前三个键为 `null` 时排在有值之后。三个业务键都缺失或都相同，仍用 `market`、`code` 决定一只，并在命中依据里列出其余同高度股票。`seal_ratio` 只用 `get` 已经给出的值，不在本 skill 里重算。
+并列排序键统一为：首次涨停时间（`first_limit_time`，早者优先）→ 封成比（`seal_ratio`，大者优先）→ 封单额（`seal_amount`，大者优先）→ `market` 升序 → `code` 升序。前三个键为 `null` 时排在有值之后。三个业务键都缺失或都相同，仍用 `market`、`code` 决定一只，并在命中依据里列出其余同高度股票。三个业务键**都缺失**时，命中依据必须如实写明「首次涨停时间、封成比、封单额均缺失；按 market/code 顺序展示」，不得写成「按首次涨停时间、封成比、封单额……取本只」——那会误导读者以为缺失字段参与了比较。`seal_ratio` 只用 `get` 已经给出的值，不在本 skill 里重算。
 
 - **总龙头**：全市场（候选池内）最高 `streak_height`，单独列出。同高度的其余股票写入 `tied`，命中依据用 `basis`。
 - **板块龙头**：每个强势板块内最高 `streak_height` 的股票，并列时用同一套排序键。

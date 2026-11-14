@@ -302,9 +302,21 @@ def _leader_basis(winner: dict[str, Any], tied: list[dict[str, Any]]) -> str:
         f"封成比{_format_ratio(winner['seal_ratio'])}",
         f"封单额{_format_amount(winner['seal_amount'])}",
     ]
-    if tied:
-        others = "、".join(f"{item['market']} {item['code']} {item['name']}" for item in tied)
-        parts.append(f"同高度还有 {others}，按首次涨停时间、封成比、封单额、market、code 取本只")
+    if not tied:
+        return "，".join(parts)
+    others = "、".join(f"{item['market']} {item['code']} {item['name']}" for item in tied)
+    business_keys_all_missing = (
+        winner["first_limit_time"] is None
+        and winner["seal_ratio"] is None
+        and winner["seal_amount"] is None
+    )
+    if business_keys_all_missing:
+        # 并列者的三个业务键同样全缺（缺失键排在有值之后），说明排序没用到它们，如实写明。
+        return (
+            f"{winner['streak_height']}板，首次涨停时间、封成比、封单额均缺失；"
+            f"按 market/code 顺序展示，其余同高度股票为 {others}"
+        )
+    parts.append(f"同高度还有 {others}，按首次涨停时间、封成比、封单额、market、code 取本只")
     return "，".join(parts)
 
 
