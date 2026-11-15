@@ -90,12 +90,14 @@ class MixedFixtureTest(unittest.TestCase):
         )
         self.assertTrue(all(item["market"] and item["code"] for item in result["leaders"]["sectors"]))
 
-        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "000010"])
-        self.assertEqual([item["code"] for item in result["row2"]], ["000001", "300001", "600099"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600004", "600002"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["000001", "300001"])
         self.assertEqual(result["row1"][0]["limit_rate_bp"], 1000)
         self.assertLess(result["row1"][0]["close_price"], 30)
         self.assertEqual(result["row2"][0]["close_price"], 35)
         self.assertEqual(result["row2"][1]["limit_rate_bp"], 2000)
+        self.assertNotIn("000010", [item["code"] for item in result["row1"] + result["row2"]])
+        self.assertNotIn("600099", [item["code"] for item in result["row1"] + result["row2"]])
         self.assertNotIn("row1_total", result)
         self.assertNotIn("row2_total", result)
         self.assertNotIn("unclassified_total", result)
@@ -103,12 +105,12 @@ class MixedFixtureTest(unittest.TestCase):
         self.assertEqual(result["unclassified_rows"][0]["missing_fields"], ["stock_float_market_cap"])
         self.assertIsNone(result["unclassified_rows"][0]["seal_to_float_ratio"])
         self.assertIn("数据缺失：个股流通市值", result["unclassified_rows"][0]["basis"])
-        self.assertEqual(result["row1"][0]["seal_ratio"], 0.3)
-        self.assertEqual(result["row1"][0]["seal_ratio_rank"], 3)
-        self.assertEqual(result["row1"][0]["seal_amount_rank"], 3)
+        self.assertEqual(result["row1"][0]["seal_ratio"], 0.3333)
+        self.assertEqual(result["row1"][0]["seal_ratio_rank"], 2)
+        self.assertEqual(result["row1"][0]["seal_amount_rank"], 4)
         self.assertEqual(
             result["row1"][0]["line"],
-            "机器人二板 `600002`，2板，机器人，12.50元，流通市值50.00亿元，封成比30.00%（第3），封单额9000.00万元（第3）",
+            "军工首板 `600004`，1板，军工，15.00元，流通市值80.00亿元，封成比33.33%（第2），封单额5000.00万元（第4）",
         )
         self.assertNotIn(" sh ", result["row1"][0]["line"])
         self.assertNotIn(" sz ", result["row1"][0]["line"])
@@ -117,7 +119,7 @@ class MixedFixtureTest(unittest.TestCase):
             "机器人（涨停 3，最高 4 板）",
         )
         self.assertEqual(result["leaders"]["market"]["seal_ratio_rank"], 1)
-        self.assertAlmostEqual(result["row1"][0]["seal_to_float_ratio"], 90_000_000 / 5_000_000_000)
+        self.assertAlmostEqual(result["row1"][0]["seal_to_float_ratio"], 50_000_000 / 8_000_000_000)
         self.assertIn("40.00%", result["leaders"]["market"]["basis"])
 
         names = _names(result)
@@ -227,7 +229,7 @@ class TieBreakTest(unittest.TestCase):
         result = pick(_data([_stock(sectors=["只有一个"])]))
         self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["只有一个"])
 
-    def test_empty_sectors_skip_grouping_but_join_leaders_and_rows(self) -> None:
+    def test_empty_sectors_skip_grouping_and_rows_but_join_market_leader(self) -> None:
         result = pick(
             _data(
                 [
@@ -239,7 +241,10 @@ class TieBreakTest(unittest.TestCase):
         )
         self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["有板块"])
         self.assertEqual(result["leaders"]["market"]["code"], "600002")
-        self.assertEqual([item["code"] for item in result["row1"]], ["600001", "600003"])
+        self.assertIn("无板块", result["leaders"]["market"]["line"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual(result["unclassified_rows"], [])
         self.assertEqual(result["status"], "ok")
 
     def test_identical_sector_keys_break_by_unicode_code_point(self) -> None:
@@ -425,11 +430,11 @@ class RowDisplayLimitTest(unittest.TestCase):
         self.assertEqual(len(result["row1"]), 3)
         self.assertEqual(
             [item["code"] for item in result["row1"]],
-            ["600010", "600000", "600001"],
+            ["600000", "600001", "600002"],
         )
         self.assertEqual(
             [item["code"] for item in result["row2"]],
-            ["600002", "600003", "600004"],
+            ["600003", "600004", "600010"],
         )
         self.assertTrue(
             {item["code"] for item in result["row1"]}.isdisjoint(
@@ -455,7 +460,7 @@ class RowDisplayLimitTest(unittest.TestCase):
 
 
 class StrengthOrderTest(unittest.TestCase):
-    def test_row1_keeps_only_10cm_and_puts_second_board_first(self) -> None:
+    def test_row1_keeps_only_10cm_and_sorts_by_strength(self) -> None:
         result = pick(
             _data(
                 [
@@ -465,7 +470,7 @@ class StrengthOrderTest(unittest.TestCase):
                 ]
             )
         )
-        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600001"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001", "600002"])
         self.assertEqual([item["code"] for item in result["row2"]], ["300001"])
 
     def test_fewer_than_three_10cm_names_do_not_backfill_other_limits(self) -> None:
@@ -526,20 +531,29 @@ class StrengthOrderTest(unittest.TestCase):
                 [
                     _stock(code="600001", name="甲", seal_ratio=0.2, seal_amount=10_000_000),
                     _stock(code="600002", name="乙", seal_ratio=0.2, seal_amount=30_000_000),
-                    _stock(code="600003", name="丙", seal_ratio=0.1, seal_amount=30_000_000, sectors=[]),
+                    _stock(
+                        code="600003",
+                        name="丙",
+                        seal_ratio=0.1,
+                        seal_amount=30_000_000,
+                        sectors=[],
+                        streak_height=5,
+                    ),
                 ]
             )
         )
         by_code = {item["code"]: item for item in result["row1"] + result["row2"]}
+        self.assertNotIn("600003", by_code)
         self.assertEqual(by_code["600001"]["seal_ratio_rank"], 1)
         self.assertEqual(by_code["600002"]["seal_ratio_rank"], 1)
-        self.assertEqual(by_code["600003"]["seal_ratio_rank"], 3)
+        self.assertEqual(result["leaders"]["market"]["code"], "600003")
+        self.assertEqual(result["leaders"]["market"]["seal_ratio_rank"], 3)
         self.assertEqual(by_code["600002"]["seal_amount_rank"], 1)
-        self.assertEqual(by_code["600003"]["seal_amount_rank"], 1)
+        self.assertEqual(result["leaders"]["market"]["seal_amount_rank"], 1)
         self.assertEqual(by_code["600001"]["seal_amount_rank"], 3)
         self.assertEqual(
-            by_code["600003"]["line"],
-            "丙 `600003`，1板，无板块，10.00元，流通市值20.00亿元，封成比10.00%（第3），封单额3000.00万元（第1）",
+            result["leaders"]["market"]["line"],
+            "丙 `600003`，5板，无板块，10.00元，流通市值20.00亿元，封成比10.00%（第3），封单额3000.00万元（第1）",
         )
 
     def test_tied_leader_line_names_the_other_stock_without_market(self) -> None:
@@ -556,6 +570,86 @@ class StrengthOrderTest(unittest.TestCase):
             "日出东方 `603366`，5板，一般零售，10.00元，流通市值20.00亿元，"
             "封成比20.00%（第1），封单额1000.00万元（第1）（与大东方 `600327` 同高）",
         )
+
+    def test_rows_stay_inside_strong_sectors_and_ignore_board_height(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="甲三板", sectors=["甲"], streak_height=3, seal_ratio=0.01),
+                    _stock(code="600002", name="甲三板二", sectors=["甲"], streak_height=3, seal_ratio=0.01),
+                    _stock(code="600003", name="甲首板", sectors=["甲"], streak_height=1, seal_ratio=0.2),
+                    _stock(code="600004", name="乙二板弱", sectors=["乙"], streak_height=2, seal_ratio=0.05),
+                    _stock(code="600005", name="乙三板", sectors=["乙"], streak_height=3, seal_ratio=0.01),
+                    _stock(code="600006", name="丙首板", sectors=["丙"], streak_height=1, seal_ratio=0.15, limit_rate_bp=2000),
+                    _stock(code="600007", name="丙三板", sectors=["丙"], streak_height=3, seal_ratio=0.01),
+                    _stock(code="600008", name="冷门强封", sectors=["丁"], streak_height=1, seal_ratio=0.99),
+                    _stock(code="600009", name="无板块", sectors=[], streak_height=1, seal_ratio=0.5),
+                ]
+            )
+        )
+        self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["甲", "丙", "乙"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600003", "600004"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["600006"])
+        outside = {item["code"] for item in result["row1"] + result["row2"] + result["unclassified_rows"]}
+        self.assertTrue({"600008", "600009"}.isdisjoint(outside))
+
+    def test_one_strong_sector_tag_is_enough_and_the_stock_is_listed_once(self) -> None:
+        stocks = [
+            _stock(code="600010", name="跨板块", sectors=["甲", "冷门"], seal_ratio=0.8),
+            _stock(code="600011", name="纯冷门", sectors=["冷门"], seal_ratio=0.99),
+            _stock(code="600007", name="乙补", sectors=["乙"], streak_height=3, seal_ratio=0.01),
+            _stock(code="600008", name="丙补", sectors=["丙"], streak_height=3, seal_ratio=0.01),
+        ]
+        for index, sector in enumerate(("甲", "乙", "丙")):
+            stocks.append(_stock(code=f"60000{index * 2 + 1}", sectors=[sector], streak_height=3, seal_ratio=0.01))
+            stocks.append(_stock(code=f"60000{index * 2 + 2}", sectors=[sector], streak_height=3, seal_ratio=0.01))
+        result = pick(_data(stocks))
+        self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["丙", "乙", "甲"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600010"])
+        self.assertEqual(result["row2"], [])
+        self.assertNotIn("600011", [item["code"] for item in result["row1"] + result["row2"] + result["unclassified_rows"]])
+
+    def test_first_boards_outside_strong_sectors_leave_rows_empty(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", sectors=["甲"], streak_height=4),
+                    _stock(code="600002", sectors=["甲"], streak_height=4),
+                    _stock(code="600003", sectors=["乙"], streak_height=3),
+                    _stock(code="600004", sectors=["乙"], streak_height=3),
+                    _stock(code="600005", sectors=["丙"], streak_height=3),
+                    _stock(code="600006", sectors=["丙"], streak_height=3),
+                    _stock(code="600007", name="冷门首板", sectors=["丁"], streak_height=1, seal_ratio=0.9),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "no_row_candidates")
+        self.assertEqual(result["message"], "强势板块内没有首板或二板")
+        self.assertEqual([item["theme"] for item in result["strong_sectors"]], ["甲", "丙", "乙"])
+        self.assertEqual(result["row1"], [])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual(result["unclassified_rows"], [])
+        self.assertEqual(result["leaders"]["market"]["streak_height"], 4)
+
+    def test_missing_fields_outside_strong_sectors_stay_out_of_unclassified(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="甲首板", sectors=["甲"], streak_height=1),
+                    _stock(code="600002", sectors=["甲"], streak_height=3),
+                    _stock(code="600008", name="甲缺值", sectors=["甲"], streak_height=2, close_price=None),
+                    _stock(code="600003", sectors=["乙"], streak_height=3),
+                    _stock(code="600004", sectors=["乙"], streak_height=3),
+                    _stock(code="600005", sectors=["丙"], streak_height=3),
+                    _stock(code="600006", sectors=["丙"], streak_height=3),
+                    _stock(code="600007", name="冷门缺值", sectors=["丁"], streak_height=1, stock_float_market_cap=None),
+                ]
+            )
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
+        self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600008"])
+        self.assertNotIn("600007", [item["code"] for item in result["unclassified_rows"]])
 
     def test_missing_close_price_is_unclassified(self) -> None:
         result = pick(_data([_stock(close_price=None)]))
@@ -683,6 +777,8 @@ class SkillTextTest(unittest.TestCase):
             "照抄 `line`",
             "不写 `sh`",
             "封成比及排名",
+            "强势板块内没有首板或二板",
+            "不作为排序键",
         ):
             self.assertIn(phrase, text)
 

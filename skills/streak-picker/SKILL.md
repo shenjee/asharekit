@@ -3,7 +3,7 @@ name: streak-picker
 description: "A股连板选股。用户要求从连板或每日梯队里筛选、排序、挑出候选、整理关注名单，或问强势板块、题材、总龙头、板块龙头、日内龙头、一排二排时使用。只读 daily-market-review 已保存的复盘结果。保存、补齐、修正或查看市场复盘时不使用本 skill。"
 metadata:
   author: stock-pilot
-  version: 0.4.2
+  version: 0.4.3
   category: finance
   tags:
     - a-share
@@ -70,9 +70,9 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 | --- | --- | --- |
 | `no_record` | `review` 为 `null` 且 `events` 为空 | 库内无记录。停止 |
 | `no_closed_limit_up` | `ladder.groups` 为空，但 `review` 已有记录，或 `events` 非空 | 库内无收盘涨停事件。停止 |
-| `no_row_candidates` | 候选池非空，但没有首板或二板（全部三板及以上） | 一排和二排留空，说明「候选池内没有首板或二板」。强势板块和龙头照常输出 |
-| `unclassifiable_rows` | 有首板或二板，但每只都缺判定字段，一只都进不了两排 | 一排和二排留空。未归类最多列 3 只；回复按 `message` 说明缺的字段。强势板块和龙头照常输出 |
-| `ok` | 候选池非空，且至少有一只首板或二板可以进两排 | 按短格式输出；`unclassified_rows` 有则最多列 3 只，没有则写 0 |
+| `no_row_candidates` | 候选池非空，但没有首板或二板；或者有首板、二板，但都不在当日强势板块里 | 一排和二排留空。前一种说明「候选池内没有首板或二板」；后一种说明「强势板块内没有首板或二板」。强势板块和龙头照常输出 |
+| `unclassifiable_rows` | 强势板块里有首板或二板，但每只都缺判定字段，一只都进不了两排 | 一排和二排留空。未归类最多列 3 只；回复按 `message` 说明缺的字段。强势板块和龙头照常输出 |
+| `ok` | 强势板块里至少有一只首板或二板可以进两排 | 按短格式输出；`unclassified_rows` 有则最多列 3 只，没有则写 0 |
 
 `no_closed_limit_up` 只说明库内没有收盘涨停事件。有炸板或跌停事件时仍然用这一句。
 
@@ -82,7 +82,7 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 - 按板块（`sectors`，东方财富行业标签 hybk 原文入库，长标签可能被数据源截断，按原文归类不修补）**原文**归类板块。不自动合并近义词，不自动推断板块层级，不用 `limit_up_reasons`（涨停原因）替代——涨停原因是数据商编辑归因产品，不参与自动归类。
 - 一只股票有多个板块标签时，分别计入每个原文对应的板块；同一股票在同一板块内只计一次。
-- `sectors` 为空的股票不参与板块归类和强势板块排序，但仍参与总龙头和一排 / 二排。
+- `sectors` 为空的股票不参与板块归类和强势板块排序，但仍参与总龙头。不参与一排 / 二排。
 - 限幅不参与强势板块排序。封单额合计只表示板块热度，不表示板块里哪只股票更强。
 
 **强势板块排序**（只对收盘涨停计数），排序键依次为：
@@ -117,14 +117,14 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 ### 4. 一排 / 二排
 
-只从首板（`streak_height=1`）和二板（`streak_height=2`）里选。三板及以上不进这两排。各输出最多 3 只。
+只从当日强势板块里的首板（`streak_height=1`）和二板（`streak_height=2`）里选。股票的 `sectors` 与强势板块原文有交集才进入这一轮；没有交集的不进两排，也不进未归类。三板及以上不进这两排。各输出最多 3 只。
 
-判定字段为 `close_price`、`stock_float_market_cap`、`limit_rate_bp`、`seal_ratio`、`seal_amount`、`first_limit_time`。有一个为 `null`，或流通市值为 `0`，就进 `unclassified_rows`，不参与两排排序。`sectors` 为空不影响这两排。
+判定字段为 `close_price`、`stock_float_market_cap`、`limit_rate_bp`、`seal_ratio`、`seal_amount`、`first_limit_time`。有一个为 `null`，或流通市值为 `0`，就进 `unclassified_rows`，不参与两排排序。
 
-- **一排**必须同时满足三道门槛：收盘价严格 < 30 元、个股流通市值严格 < 100 亿、`limit_rate_bp = 1000`（10cm）。收盘价等于 30 元，或流通市值等于 100 亿，都不进一排。过了这三道之后再排序：二板优先于首板，然后用第 3 节的五键，取前 3。10cm 不足 3 只时名额留空，20cm、30cm 不补进一排。
-- **二排**：从没有进入一排的首板、二板里，只按第 3 节的五键再取最多 3 只。这里包括没过价格、市值或 10cm 的股票，也包括过了三道门槛但没有进入一排前 3 的 10cm。不与一排重复。二排只按封锁强度从剩余里取，不把「不满足一排」写成它的定义。
+- **一排**必须同时满足三道门槛：收盘价严格 < 30 元、个股流通市值严格 < 100 亿、`limit_rate_bp = 1000`（10cm）。收盘价等于 30 元，或流通市值等于 100 亿，都不进一排。过了这三道之后，只按第 3 节的五键取前 3。连板高度写在 `line` 里，不作为排序键。10cm 不足 3 只时名额留空，20cm、30cm 不补进一排。
+- **二排**：从同一批强势板块里、没有进入一排的首板、二板中，只按第 3 节的五键再取最多 3 只。这里包括没过价格、市值或 10cm 的股票，也包括过了三道门槛但没有进入一排前 3 的 10cm。不与一排重复。二排只按封锁强度从剩余里取，不把「不满足一排」写成它的定义。
 
-首板和二板一只都进不了两排时，`status` 为 `unclassifiable_rows`，两排留空，用 `message` 说明实际缺失的字段和只数。至少有一只能进两排时，`status` 为 `ok`。候选池里没有首板或二板时，`status` 为 `no_row_candidates`。
+强势板块里的首板和二板一只都进不了两排时，`status` 为 `unclassifiable_rows`，两排留空，用 `message` 说明实际缺失的字段和只数。至少有一只能进两排时，`status` 为 `ok`。候选池里没有首板或二板时，`status` 为 `no_row_candidates`，`message` 为「候选池内没有首板或二板」。有首板或二板、但都不在强势板块里时，`status` 仍为 `no_row_candidates`，`message` 为「强势板块内没有首板或二板」。
 
 不要把「不是 10cm」或「不满足某项价格、市值门槛」写成二排。不要写「共 N 只，取前 3」。`pick` 不输出 `row1_total`、`row2_total`、`unclassified_total`。
 
