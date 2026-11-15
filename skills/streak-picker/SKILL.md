@@ -3,7 +3,7 @@ name: streak-picker
 description: "A股连板选股。用户要求从连板或每日梯队里筛选、排序、挑出候选、整理关注名单，或问强势板块、题材、总龙头、板块龙头、日内龙头、一排二排时使用。只读 daily-market-review 已保存的复盘结果。保存、补齐、修正或查看市场复盘时不使用本 skill。"
 metadata:
   author: stock-pilot
-  version: 0.3.0
+  version: 0.4.0
   category: finance
   tags:
     - a-share
@@ -71,8 +71,8 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 | `no_record` | `review` 为 `null` 且 `events` 为空 | 库内无记录。停止 |
 | `no_closed_limit_up` | `ladder.groups` 为空，但 `review` 已有记录，或 `events` 非空 | 库内无收盘涨停事件。停止 |
 | `no_row_candidates` | 候选池非空，但没有首板或二板（全部三板及以上） | 一排和二排留空，说明「候选池内没有首板或二板」。强势板块和龙头照常输出 |
-| `unclassifiable_rows` | 有首板或二板，但每只都至少缺一个判定字段，一只都分不了排（不要求缺的是同一个字段） | 一排和二排留空，按 `message` 说明缺失的字段和只数。强势板块和龙头照常输出 |
-| `ok` | 候选池非空，且至少有一只首板或二板可以判定 | 按输出规则渲染三张表；`unclassified_rows` 里的股票单独列出 |
+| `unclassifiable_rows` | 有首板或二板，但每只都缺判定字段，一只都进不了两排 | 一排和二排留空。未归类最多列 3 只；回复按 `message` 说明缺的字段。强势板块和龙头照常输出 |
+| `ok` | 候选池非空，且至少有一只首板或二板可以进两排 | 按短格式输出；`unclassified_rows` 有则最多列 3 只，没有则写 0 |
 
 `no_closed_limit_up` 只说明库内没有收盘涨停事件。有炸板或跌停事件时仍然用这一句。
 
@@ -82,7 +82,8 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 - 按板块（`sectors`，东方财富行业标签 hybk 原文入库，长标签可能被数据源截断，按原文归类不修补）**原文**归类板块。不自动合并近义词，不自动推断板块层级，不用 `limit_up_reasons`（涨停原因）替代——涨停原因是数据商编辑归因产品，不参与自动归类。
 - 一只股票有多个板块标签时，分别计入每个原文对应的板块；同一股票在同一板块内只计一次。
-- `sectors` 为空的股票不参与板块归类和强势板块排序，但仍参与总龙头和一排 / 二排的判定。
+- `sectors` 为空的股票不参与板块归类和强势板块排序，但仍参与总龙头和一排 / 二排。
+- 限幅不参与强势板块排序。封单额合计只表示板块热度，不表示板块里哪只股票更强。
 
 **强势板块排序**（只对收盘涨停计数），排序键依次为：
 
@@ -102,41 +103,56 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 - **板块龙头**：每个强势板块内最高 `streak_height` 的股票，并列时用同一套排序键。
 - **日内龙头**：每个强势板块内 `first_limit_time` 最早的股票。同一时刻再按封成比 → 封单额 → `market` → `code`。板块内全部缺失 `first_limit_time` 时不点名，`undetermined` 为 true，`basis` 为「数据缺失，无法判定」。这种情况下不用封成比、封单额或代码代替时间。
 
-龙头判定只排序、不改写复盘库里的 `is_leader` 字段；`is_leader` 是复盘事实，不是本 skill 的判定结果。
+龙头判定只排序、不改写复盘库里的 `is_leader` 字段；`is_leader` 是复盘事实，不是本 skill 的判定结果。高度和板块地位只表示市场身份，不是封锁强度。龙头排序不用 `seal_to_float_ratio`。
 
-### 3. 一排 / 二排（候选名单）
+### 3. 个股封锁强度
 
-只对首板（`streak_height=1`）和二板（`streak_height=2`）分类：
+全池用下面五键，不按市值分组，也不设全市场固定线。两个相对量打平之后才看绝对封单额。「接近」就是前两键打平，不另设百分比带宽。限幅不参与这五键。
 
-- **一排**：同时满足以下三项——
-  - 收盘价**严格 < 30 元**（`close_price < 30`）；
-  - 个股流通市值**严格 < 100 亿**（`stock_float_market_cap < 10_000_000_000` 元）；
-  - 涨停限幅 10%（`limit_rate_bp = 1000`）。
-- **二排**：三项判定字段都有值、但确认不满足一排的首板 / 二板。收盘价、个股流通市值、涨停限幅都读得到，才谈得上「不满足」。
-- **无法分排**：三项判定字段任一为 `null` 的首板 / 二板。不估算，不进一排，也不进二排，列入 `unclassified_rows`，并写明缺失字段。
+1. 封成比 `seal_ratio`，高者优先。只用 `get` 已有值，含义仍是封单额 / 成交额。
+2. `seal_to_float_ratio` = 封单额 / 流通市值，高者优先。使用时现算，不入库，不覆盖 `seal_ratio`。流通市值为 `null` 或 `0` 时，这个比值为 `null`。
+3. 绝对封单额，大者优先。只在前两键打平时比较。
+4. 首次涨停时间，早者优先。早启动不等于收盘仍强。
+5. `market` 升序，然后 `code` 升序。
 
-**每类最多列 3 只**（`pick` 的 `row_display_limit`）。排序统一为：连板高度（二板优先）→ 首次涨停时间（早者优先，`null` 排后）→ 封成比（大者优先）→ 封单额（大者优先）→ `market` → `code`，取前 3 只。选股是筛选不是抄名单：总数超过 3 只时绝不能逐只铺开。`pick` 的 `row1_total` / `row2_total` / `unclassified_total` 是截断前的总数；总数超过 3 时，回复必须注明「共 N 只，取前 3」，不得把取出的 3 只说成全部候选。
+### 4. 一排 / 二排
 
-首板和二板里一只都判定不了时，一排和二排都留空，`status` 为 `unclassifiable_rows`。这种情况下不逐行铺开，用 `message` 说明缺的是哪些字段（按实际缺失列出，不罗列未缺失的字段）、涉及多少只。只要有一只首板或二板能判定，`status` 仍为 `ok`；缺字段的那几只仍写在 `unclassified_rows` 里，方便回补复盘数据。候选池里一只首板或二板都没有时，`status` 为 `no_row_candidates`，两排留空并说明。
+只从首板（`streak_height=1`）和二板（`streak_height=2`）里选。三板及以上不进这两排。各输出最多 3 只。价格和流通市值不是入选门槛。
 
-### 4. 输出
+判定字段为 `seal_ratio`、`seal_amount`、`stock_float_market_cap`、`first_limit_time`、`limit_rate_bp`。有一个为 `null`，或流通市值为 `0`，就进 `unclassified_rows`，不参与两排排序。`sectors` 为空不影响这两排。
 
-三张表：**强势板块**、**龙头**（总龙头 / 板块龙头 / 日内龙头）、**一排 / 二排**。行序用 `pick` 的数组顺序。点到股票的行都带 `market` 和 `code`，命中依据用该行的 `basis`：
+- **一排**排序键：`limit_rate_bp = 1000`（10cm）的排在前面，然后二板优先于首板，然后用第 3 节的五键。10cm 是连板可能性，不是强弱标准。10cm 不足 3 只时，名额留给已经按这个顺序排好的 20cm、30cm。
+- **二排**：从没有进入一排的首板、二板里，只按第 3 节的五键再取最多 3 只。不再把 10cm 和二板提前。因此二排可以有非 10cm，也可以有没进一排的 10cm，并且不与一排重复。
 
-- 强势板块表：板块原文、涨停家数、最高连板、最早涨停时间、封单额合计、`basis`。
-- 龙头表：类别、所属板块（总龙头除外）、`market`、`code`、名称、连板高度、`basis`。`tied` 里的同高度股票也写出 `market` 和 `code`。日内龙头 `undetermined` 为 true 时，这一行只保留板块和 `basis`。
-- 一排 / 二排表：`market`、`code`、名称、连板高度、收盘价、个股流通市值、`limit_rate_bp`、`basis`。归入二排时，`basis` 写明未满足的一排条件。`unclassified_rows` 单独列出（同样最多 3 只，超出按 `unclassified_total` 注明总数），写出 `market`、`code` 和缺失字段；这些行不是二排，也不是「已确认不满足」。
+首板和二板一只都进不了两排时，`status` 为 `unclassifiable_rows`，两排留空，用 `message` 说明实际缺失的字段和只数。至少有一只能进两排时，`status` 为 `ok`。候选池里没有首板或二板时，`status` 为 `no_row_candidates`。
+
+不要把「不是 10cm」或「不满足某项价格、市值门槛」写成二排。不要写「共 N 只，取前 3」。`pick` 不输出 `row1_total`、`row2_total`、`unclassified_total`。
+
+### 5. 输出
+
+对用户只出短格式，先给结论，顺序固定：
+
+- 强势板块：板块原文、涨停家数、最高连板
+- 总龙头
+- 板块龙头
+- 日内龙头：`undetermined` 为 true 时只写板块和「数据缺失，无法判定」
+- 一排：最多 3 只，每只写 `market`、`code`、名称
+- 二排：最多 3 只，每只写 `market`、`code`、名称
+- 未归类：一只都没有就写 0；有则最多 3 只，写出 `market`、`code` 和缺失字段
+
+龙头行写名称、`market`、`code`、连板高度。安装核对、补缺预演、口径说明、字段明细和代码不要跟这份名单写在同一段。需要解释某只为什么入选时另说。`basis` 留在 `pick` 的 JSON 里，不要塞进名单。
 
 空值规则：
 
-- 筛选和排序遇到 `null` 一律按「数据缺失」如实标注，不得估算、不得补 `0`。
-- `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap` 只使用 `get` 读到的值。值为 `null` 时按数据缺失处理，不估算，不改用其他来源补齐。本 skill 不关心这些值存在 Supabase、SQLite 还是别处。
+- `null` 不补 `0`、不估算。龙头并列时，缺值排在有值之后。
+- `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap` 只使用 `get` 读到的值。
+- `seal_to_float_ratio` 只由封单额和流通市值现算。流通市值为 `null` 或 `0` 时为 `null`。
 
 展示口径（与复盘 skill 一致）：
 
-- `seal_ratio` 读取结果为小数，展示为百分数（`0.0207` → `2.07%`）。
-- `first_limit_time` 展示为 `HH:MM:SS`。跌停方向无此字段，本 skill 也不取跌停事件。
-- 收盘价保留两位小数；封单额展示为万元或亿元；个股流通市值展示为亿元。
+- `seal_ratio` 和 `seal_to_float_ratio` 都是小数，展示为百分数（`0.0207` → `2.07%`）。
+- `first_limit_time` 展示为 `HH:MM:SS`。
+- 封单额展示为万元或亿元；个股流通市值展示为亿元。
 
 ## 边界
 

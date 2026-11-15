@@ -1,6 +1,7 @@
 """按 SKILL.md 的选股规则，把一次 get 结果分成三张表。
 
 排序和筛选以本模块为准。展示单位在这里算好，调用方按输出顺序渲染，不另行重算。
+`seal_ratio` 只读 get 已有值。`seal_to_float_ratio` 在这里现算，不写回封成比。
 """
 
 from __future__ import annotations
@@ -9,8 +10,6 @@ import math
 from typing import Any
 
 ONE_HUNDRED_MILLION = 100_000_000
-ROW1_PRICE_LIMIT = 30
-ROW1_CAP_LIMIT = 10_000_000_000
 ROW1_LIMIT_RATE_BP = 1000
 STRONG_SECTOR_LIMIT = 3
 ROW_DISPLAY_LIMIT = 3
@@ -26,10 +25,18 @@ MESSAGE_NO_CLOSED_LIMIT_UP = "库内无收盘涨停事件"
 MESSAGE_INTRADAY_UNDETERMINED = "数据缺失，无法判定"
 MESSAGE_NO_ROW_CANDIDATES = "候选池内没有首板或二板"
 
-ROW_FIELDS = ("close_price", "stock_float_market_cap", "limit_rate_bp")
+ROW_FIELDS = (
+    "seal_ratio",
+    "seal_amount",
+    "stock_float_market_cap",
+    "first_limit_time",
+    "limit_rate_bp",
+)
 FIELD_LABELS = {
-    "close_price": "收盘价",
+    "seal_ratio": "封成比",
+    "seal_amount": "封单额",
     "stock_float_market_cap": "个股流通市值",
+    "first_limit_time": "首次涨停时间",
     "limit_rate_bp": "涨停限幅",
 }
 
@@ -57,22 +64,19 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
         return _empty(STATUS_NO_CLOSED_LIMIT_UP, MESSAGE_NO_CLOSED_LIMIT_UP)
 
     strong = _strong_sectors(stocks)
-    row1_all = [_candidate_row(stock, missing=[], unmet=[]) for stock in _row_sorted(_row1(stocks))]
-    row2_all = [
-        _candidate_row(stock, missing=[], unmet=unmet)
-        for stock, unmet in _row2(stocks)
-    ]
-    unclassified_all = [
-        _candidate_row(stock, missing=missing, unmet=[])
-        for stock, missing in _unclassified_rows(stocks)
-    ]
-    has_classified_rows = bool(row1_all or row2_all)
+    eligible, unclassified_all = _split_rows(stocks)
+    row1_stocks = sorted(eligible, key=_row1_sort_key)[:ROW_DISPLAY_LIMIT]
+    chosen = {(item["market"], item["code"]) for item in row1_stocks}
+    row2_stocks = sorted(
+        (item for item in eligible if (item["market"], item["code"]) not in chosen),
+        key=_strength_sort_key,
+    )[:ROW_DISPLAY_LIMIT]
     status = STATUS_OK
     message = None
     if not any(item["streak_height"] in (1, 2) for item in stocks):
         status = STATUS_NO_ROW_CANDIDATES
         message = MESSAGE_NO_ROW_CANDIDATES
-    elif not has_classified_rows and unclassified_all:
+    elif not eligible and unclassified_all:
         status = STATUS_UNCLASSIFIABLE_ROWS
         message = _unclassifiable_message(unclassified_all)
     return {
@@ -89,13 +93,12 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
                 _intraday_row(item["theme"], item["stocks"]) for item in strong
             ],
         },
-        "row1": row1_all[:ROW_DISPLAY_LIMIT],
-        "row1_total": len(row1_all),
-        "row2": row2_all[:ROW_DISPLAY_LIMIT],
-        "row2_total": len(row2_all),
-        "unclassified_rows": unclassified_all[:ROW_DISPLAY_LIMIT],
-        "unclassified_total": len(unclassified_all),
-        "row_display_limit": ROW_DISPLAY_LIMIT,
+        "row1": [_candidate_row(stock, missing=[]) for stock in row1_stocks],
+        "row2": [_candidate_row(stock, missing=[]) for stock in row2_stocks],
+        "unclassified_rows": [
+            _candidate_row(stock, missing=missing)
+            for stock, missing in _capped_unclassified(unclassified_all)
+        ],
     }
 
 
@@ -106,12 +109,8 @@ def _empty(status: str, message: str) -> dict[str, Any]:
         "strong_sectors": [],
         "leaders": {"market": None, "sectors": [], "intraday": []},
         "row1": [],
-        "row1_total": 0,
         "row2": [],
-        "row2_total": 0,
         "unclassified_rows": [],
-        "unclassified_total": 0,
-        "row_display_limit": ROW_DISPLAY_LIMIT,
     }
 
 
@@ -167,6 +166,11 @@ def _normalize_stock(raw: Any) -> dict[str, Any]:
     streak = _integer(raw.get("streak_height"), f"{market} {code} 的 streak_height")
     if streak is None:
         raise PickError(f"{market} {code} 缺少 streak_height")
+    seal_amount = _number(raw.get("seal_amount"), f"{market} {code} 的 seal_amount")
+    stock_float_market_cap = _number(
+        raw.get("stock_float_market_cap"),
+        f"{market} {code} 的 stock_float_market_cap",
+    )
     return {
         "market": market,
         "code": code,
@@ -178,13 +182,18 @@ def _normalize_stock(raw: Any) -> dict[str, Any]:
         "sectors": list(dict.fromkeys(sectors)),
         "first_limit_time": _text_or_none(raw.get("first_limit_time"), f"{market} {code} 的 first_limit_time"),
         "seal_ratio": _number(raw.get("seal_ratio"), f"{market} {code} 的 seal_ratio"),
-        "seal_amount": _number(raw.get("seal_amount"), f"{market} {code} 的 seal_amount"),
+        "seal_amount": seal_amount,
         "close_price": _number(raw.get("close_price"), f"{market} {code} 的 close_price"),
-        "stock_float_market_cap": _number(
-            raw.get("stock_float_market_cap"),
-            f"{market} {code} 的 stock_float_market_cap",
-        ),
+        "stock_float_market_cap": stock_float_market_cap,
+        "seal_to_float_ratio": _seal_to_float_ratio(seal_amount, stock_float_market_cap),
     }
+
+
+def _seal_to_float_ratio(seal_amount: float | None, stock_float_market_cap: float | None) -> float | None:
+    """封单额 / 流通市值。空或 0 市值时为 null，不改写 seal_ratio。"""
+    if seal_amount is None or stock_float_market_cap is None or stock_float_market_cap == 0:
+        return None
+    return seal_amount / stock_float_market_cap
 
 
 def _integer(value: Any, label: str) -> int | None:
@@ -332,7 +341,6 @@ def _leader_basis(
         and winner["seal_amount"] is None
     )
     if business_keys_all_missing:
-        # 并列者的三个业务键同样全缺（缺失键排在有值之后），说明排序没用到它们，如实写明。
         return (
             f"{winner['streak_height']}板，首次涨停时间、封成比、封单额均缺失；"
             f"按 market/code 顺序展示，其余同高度股票为 {others}"
@@ -364,85 +372,90 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
     return _leader_row("日内龙头", theme, winner, tied, tied_label="同一涨停时间还有")
 
 
-def _unclassifiable_message(unclassified: list[dict[str, Any]]) -> str:
-    missing = [
-        field
-        for field in ROW_FIELDS
-        if any(field in item["missing_fields"] for item in unclassified)
-    ]
-    labels = "、".join(FIELD_LABELS[field] for field in missing)
-    return f"首板和二板的{labels}未保存，共{len(unclassified)}只，无法分排"
-
-
-def _row1(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [stock for stock in stocks if _row_split(stock) == (None, None)]
-
-
-def _row2(stocks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[str]]]:
-    chosen: list[tuple[dict[str, Any], list[str]]] = []
-    for stock in _row_sorted([item for item in stocks if item["streak_height"] in (1, 2)]):
-        missing, unmet = _row_split(stock)
-        if missing is None or missing:
+def _split_rows(
+    stocks: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], list[str]]]]:
+    eligible: list[dict[str, Any]] = []
+    unclassified: list[tuple[dict[str, Any], list[str]]] = []
+    for stock in stocks:
+        if stock["streak_height"] not in (1, 2):
             continue
-        chosen.append((stock, unmet))
-    return chosen
-
-
-def _unclassified_rows(stocks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[str]]]:
-    chosen: list[tuple[dict[str, Any], list[str]]] = []
-    for stock in _row_sorted([item for item in stocks if item["streak_height"] in (1, 2)]):
-        missing, _unmet = _row_split(stock)
+        missing = _row_missing(stock)
         if missing:
-            chosen.append((stock, missing))
-    return chosen
+            unclassified.append((stock, missing))
+        else:
+            eligible.append(stock)
+    return eligible, unclassified
 
 
-def _row_split(stock: dict[str, Any]) -> tuple[list[str], list[str]] | tuple[None, None]:
-    if stock["streak_height"] not in (1, 2):
-        return [], []
+def _row_missing(stock: dict[str, Any]) -> list[str]:
     missing: list[str] = []
-    unmet: list[str] = []
-    if stock["close_price"] is None:
-        missing.append("close_price")
-    elif stock["close_price"] >= ROW1_PRICE_LIMIT:
-        unmet.append("收盘价不低于30元")
-    if stock["stock_float_market_cap"] is None:
+    if stock["seal_ratio"] is None:
+        missing.append("seal_ratio")
+    if stock["seal_amount"] is None:
+        missing.append("seal_amount")
+    cap = stock["stock_float_market_cap"]
+    if cap is None or cap == 0:
         missing.append("stock_float_market_cap")
-    elif stock["stock_float_market_cap"] >= ROW1_CAP_LIMIT:
-        unmet.append("个股流通市值不低于100亿")
+    if stock["first_limit_time"] is None:
+        missing.append("first_limit_time")
     if stock["limit_rate_bp"] is None:
         missing.append("limit_rate_bp")
-    elif stock["limit_rate_bp"] != ROW1_LIMIT_RATE_BP:
-        unmet.append("涨停限幅不是10%")
-    if not missing and not unmet:
-        return None, None
-    return missing, unmet
+    return missing
 
 
-def _row_sorted(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    # 强弱排序：先连板高度，再套龙头业务键。截断取前排和输出行序都用它。
-    return sorted(
-        stocks,
-        key=lambda item: (
-            -item["streak_height"],
-            item["first_limit_time"] is None,
-            item["first_limit_time"] or "",
-            item["seal_ratio"] is None,
-            -(item["seal_ratio"] or 0),
-            item["seal_amount"] is None,
-            -(item["seal_amount"] or 0),
-            item["market"],
-            item["code"],
-        ),
+def _strength_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
+    """封锁强度五键。前两键打平后才比较绝对封单额，然后才是首次涨停时间。"""
+    return (
+        stock["seal_ratio"] is None,
+        -(stock["seal_ratio"] or 0),
+        stock["seal_to_float_ratio"] is None,
+        -(stock["seal_to_float_ratio"] or 0),
+        stock["seal_amount"] is None,
+        -(stock["seal_amount"] or 0),
+        stock["first_limit_time"] is None,
+        stock["first_limit_time"] or "",
+        stock["market"],
+        stock["code"],
     )
 
 
-def _candidate_row(
-    stock: dict[str, Any],
-    *,
-    missing: list[str],
-    unmet: list[str],
-) -> dict[str, Any]:
+def _row1_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        0 if stock["limit_rate_bp"] == ROW1_LIMIT_RATE_BP else 1,
+        -stock["streak_height"],
+        *_strength_sort_key(stock),
+    )
+
+
+def _capped_unclassified(
+    unclassified: list[tuple[dict[str, Any], list[str]]],
+) -> list[tuple[dict[str, Any], list[str]]]:
+    ordered = sorted(unclassified, key=lambda item: (item[0]["market"], item[0]["code"]))
+    return ordered[:ROW_DISPLAY_LIMIT]
+
+
+def _unclassifiable_message(unclassified: list[tuple[dict[str, Any], list[str]]]) -> str:
+    missing = [
+        field
+        for field in ROW_FIELDS
+        if any(field in item_missing for _stock, item_missing in unclassified)
+    ]
+    labels = "、".join(FIELD_LABELS[field] for field in missing)
+    zero_cap = any(
+        stock["stock_float_market_cap"] == 0
+        for stock, item_missing in unclassified
+        if "stock_float_market_cap" in item_missing
+    )
+    if zero_cap and all(
+        stock["stock_float_market_cap"] == 0 or "stock_float_market_cap" not in item_missing
+        for stock, item_missing in unclassified
+    ) and missing == ["stock_float_market_cap"]:
+        return f"首板和二板的个股流通市值为 0，共{len(unclassified)}只，无法分排"
+    return f"首板和二板的{labels}未保存，共{len(unclassified)}只，无法分排"
+
+
+def _candidate_row(stock: dict[str, Any], *, missing: list[str]) -> dict[str, Any]:
     row = _stock_ref(stock)
     row.update(
         {
@@ -450,27 +463,38 @@ def _candidate_row(
             "close_price": stock["close_price"],
             "stock_float_market_cap": stock["stock_float_market_cap"],
             "limit_rate_bp": stock["limit_rate_bp"],
+            "seal_ratio": stock["seal_ratio"],
+            "seal_to_float_ratio": stock["seal_to_float_ratio"],
+            "seal_amount": stock["seal_amount"],
+            "first_limit_time": stock["first_limit_time"],
             "missing_fields": missing,
-            "unmet": unmet,
-            "basis": _candidate_basis(stock, missing, unmet),
+            "basis": _candidate_basis(stock, missing),
         }
     )
     return row
 
 
-def _candidate_basis(stock: dict[str, Any], missing: list[str], unmet: list[str]) -> str:
+def _candidate_basis(stock: dict[str, Any], missing: list[str]) -> str:
     facts = (
-        f"{stock['streak_height']}板，收盘价{_format_price(stock['close_price'])}，"
-        f"个股流通市值{_format_cap(stock['stock_float_market_cap'])}，"
-        f"涨停限幅{_format_limit_rate(stock['limit_rate_bp'])}"
+        f"{stock['streak_height']}板，涨停限幅{_format_limit_rate(stock['limit_rate_bp'])}，"
+        f"封成比{_format_ratio(stock['seal_ratio'])}，"
+        f"封单额/流通市值{_format_ratio(stock['seal_to_float_ratio'])}，"
+        f"封单额{_format_amount(stock['seal_amount'])}，"
+        f"首次涨停{_or_missing(stock['first_limit_time'])}"
     )
-    if not missing and not unmet:
-        return f"{facts}，三项都确认满足"
+    if not missing:
+        return facts
     notes: list[str] = []
-    if missing:
-        notes.append("数据缺失：" + "、".join(FIELD_LABELS[item] for item in missing))
-    if unmet:
-        notes.append("未满足：" + "、".join(unmet))
+    cap = stock["stock_float_market_cap"]
+    null_fields = [
+        field
+        for field in missing
+        if not (field == "stock_float_market_cap" and cap == 0)
+    ]
+    if cap == 0 and "stock_float_market_cap" in missing:
+        notes.append("个股流通市值为 0")
+    if null_fields:
+        notes.append("数据缺失：" + "、".join(FIELD_LABELS[item] for item in null_fields))
     return f"{facts}；" + "；".join(notes)
 
 
@@ -494,18 +518,6 @@ def _format_amount(value: float | None) -> str:
     if abs(value) >= ONE_HUNDRED_MILLION:
         return f"{value / ONE_HUNDRED_MILLION:.2f}亿元"
     return f"{value / 10_000:.2f}万元"
-
-
-def _format_cap(value: float | None) -> str:
-    if value is None:
-        return "缺失"
-    return f"{value / ONE_HUNDRED_MILLION:.2f}亿元"
-
-
-def _format_price(value: float | None) -> str:
-    if value is None:
-        return "缺失"
-    return f"{value:.2f}元"
 
 
 def _format_limit_rate(value: int | None) -> str:
