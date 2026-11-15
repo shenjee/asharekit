@@ -104,6 +104,19 @@ class MixedFixtureTest(unittest.TestCase):
         self.assertIsNone(result["unclassified_rows"][0]["seal_to_float_ratio"])
         self.assertIn("数据缺失：个股流通市值", result["unclassified_rows"][0]["basis"])
         self.assertEqual(result["row1"][0]["seal_ratio"], 0.3)
+        self.assertEqual(result["row1"][0]["seal_ratio_rank"], 3)
+        self.assertEqual(result["row1"][0]["seal_amount_rank"], 3)
+        self.assertEqual(
+            result["row1"][0]["line"],
+            "机器人二板 `600002`，2板，机器人，12.50元，流通市值50.00亿元，封成比30.00%（第3），封单额9000.00万元（第3）",
+        )
+        self.assertNotIn(" sh ", result["row1"][0]["line"])
+        self.assertNotIn(" sz ", result["row1"][0]["line"])
+        self.assertEqual(
+            result["strong_sectors"][0]["line"],
+            "机器人（涨停 3，最高 4 板）",
+        )
+        self.assertEqual(result["leaders"]["market"]["seal_ratio_rank"], 1)
         self.assertAlmostEqual(result["row1"][0]["seal_to_float_ratio"], 90_000_000 / 5_000_000_000)
         self.assertIn("40.00%", result["leaders"]["market"]["basis"])
 
@@ -507,6 +520,43 @@ class StrengthOrderTest(unittest.TestCase):
         self.assertAlmostEqual(result["row1"][0]["seal_to_float_ratio"], 0.005)
         self.assertEqual(result["row1"][0]["seal_ratio"], 0.2)
 
+    def test_equal_values_share_a_rank_and_the_line_omits_market(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="600001", name="甲", seal_ratio=0.2, seal_amount=10_000_000),
+                    _stock(code="600002", name="乙", seal_ratio=0.2, seal_amount=30_000_000),
+                    _stock(code="600003", name="丙", seal_ratio=0.1, seal_amount=30_000_000, sectors=[]),
+                ]
+            )
+        )
+        by_code = {item["code"]: item for item in result["row1"] + result["row2"]}
+        self.assertEqual(by_code["600001"]["seal_ratio_rank"], 1)
+        self.assertEqual(by_code["600002"]["seal_ratio_rank"], 1)
+        self.assertEqual(by_code["600003"]["seal_ratio_rank"], 3)
+        self.assertEqual(by_code["600002"]["seal_amount_rank"], 1)
+        self.assertEqual(by_code["600003"]["seal_amount_rank"], 1)
+        self.assertEqual(by_code["600001"]["seal_amount_rank"], 3)
+        self.assertEqual(
+            by_code["600003"]["line"],
+            "丙 `600003`，1板，无板块，10.00元，流通市值20.00亿元，封成比10.00%（第3），封单额3000.00万元（第1）",
+        )
+
+    def test_tied_leader_line_names_the_other_stock_without_market(self) -> None:
+        result = pick(
+            _data(
+                [
+                    _stock(code="603366", name="日出东方", streak_height=5, sectors=["一般零售"]),
+                    _stock(code="600327", name="大东方", streak_height=5, sectors=["一般零售"], first_limit_time="11:00:00"),
+                ]
+            )
+        )
+        self.assertEqual(
+            result["leaders"]["market"]["line"],
+            "日出东方 `603366`，5板，一般零售，10.00元，流通市值20.00亿元，"
+            "封成比20.00%（第1），封单额1000.00万元（第1）（与大东方 `600327` 同高）",
+        )
+
     def test_missing_close_price_is_unclassified(self) -> None:
         result = pick(_data([_stock(close_price=None)]))
         self.assertEqual(result["row1"], [])
@@ -630,6 +680,9 @@ class SkillTextTest(unittest.TestCase):
             "limit_rate_bp = 1000",
             "收盘价严格 < 30 元",
             "个股流通市值严格 < 100 亿",
+            "照抄 `line`",
+            "不写 `sh`",
+            "封成比及排名",
         ):
             self.assertIn(phrase, text)
 

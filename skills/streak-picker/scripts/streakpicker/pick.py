@@ -66,6 +66,7 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
     stocks = _pool(groups)
     if not stocks:
         return _empty(STATUS_NO_CLOSED_LIMIT_UP, MESSAGE_NO_CLOSED_LIMIT_UP)
+    _assign_ranks(stocks)
 
     strong = _strong_sectors(stocks)
     eligible, unclassified_all = _split_rows(stocks)
@@ -276,6 +277,7 @@ def _sector_row(item: dict[str, Any]) -> dict[str, Any]:
             f"最早涨停{_or_missing(item['earliest_limit_time'])}，"
             f"封单额合计{_format_amount(item['seal_amount_sum'])}"
         ),
+        "line": f"{item['theme']}（涨停 {item['limit_up_count']}，最高 {item['max_streak']} 板）",
     }
 
 
@@ -308,6 +310,7 @@ def _leader_row(
     tied: list[dict[str, Any]],
     *,
     tied_label: str = "同高度还有",
+    tie_phrase: str = "同高",
 ) -> dict[str, Any]:
     row = _stock_ref(winner)
     row.update(
@@ -316,11 +319,17 @@ def _leader_row(
             "theme": theme,
             "undetermined": False,
             "streak_height": winner["streak_height"],
+            "sectors": winner["sectors"],
+            "close_price": winner["close_price"],
+            "stock_float_market_cap": winner["stock_float_market_cap"],
             "first_limit_time": winner["first_limit_time"],
             "seal_ratio": winner["seal_ratio"],
+            "seal_ratio_rank": winner["seal_ratio_rank"],
             "seal_amount": winner["seal_amount"],
+            "seal_amount_rank": winner["seal_amount_rank"],
             "tied": [_stock_ref(item) | {"streak_height": item["streak_height"]} for item in tied],
             "basis": _leader_basis(winner, tied, tied_label=tied_label),
+            "line": _stock_line(winner, tied=tied, tie_phrase=tie_phrase),
         }
     )
     return row
@@ -368,14 +377,27 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
             "streak_height": None,
             "first_limit_time": None,
             "seal_ratio": None,
+            "seal_ratio_rank": None,
             "seal_amount": None,
+            "seal_amount_rank": None,
+            "sectors": [],
+            "close_price": None,
+            "stock_float_market_cap": None,
             "tied": [],
             "basis": MESSAGE_INTRADAY_UNDETERMINED,
+            "line": None,
         }
     ordered = sorted(timed, key=_leader_sort_key)
     winner = ordered[0]
     tied = [item for item in ordered[1:] if item["first_limit_time"] == winner["first_limit_time"]]
-    return _leader_row("日内龙头", theme, winner, tied, tied_label="同一涨停时间还有")
+    return _leader_row(
+        "日内龙头",
+        theme,
+        winner,
+        tied,
+        tied_label="同一涨停时间还有",
+        tie_phrase="同一涨停时间",
+    )
 
 
 def _split_rows(
@@ -423,6 +445,24 @@ def _is_row1(stock: dict[str, Any]) -> bool:
         and 0 < cap < ROW1_MAX_FLOAT_CAP
         and stock["limit_rate_bp"] == ROW1_LIMIT_RATE_BP
     )
+
+
+def _assign_ranks(stocks: list[dict[str, Any]]) -> None:
+    """封成比、封单额各自在当日收盘涨停池里从高到低排名。相同值同一名次，空值不排名。"""
+    for field, rank_field in (("seal_ratio", "seal_ratio_rank"), ("seal_amount", "seal_amount_rank")):
+        for stock in stocks:
+            stock[rank_field] = None
+        ordered = sorted(
+            (stock for stock in stocks if stock[field] is not None),
+            key=lambda item: (-item[field], item["market"], item["code"]),
+        )
+        last_value: float | None = None
+        rank = 0
+        for index, stock in enumerate(ordered, start=1):
+            if last_value is None or stock[field] != last_value:
+                rank = index
+                last_value = stock[field]
+            stock[rank_field] = rank
 
 
 def _strength_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
@@ -481,12 +521,16 @@ def _candidate_row(stock: dict[str, Any], *, missing: list[str]) -> dict[str, An
             "close_price": stock["close_price"],
             "stock_float_market_cap": stock["stock_float_market_cap"],
             "limit_rate_bp": stock["limit_rate_bp"],
+            "sectors": stock["sectors"],
             "seal_ratio": stock["seal_ratio"],
+            "seal_ratio_rank": stock["seal_ratio_rank"],
             "seal_to_float_ratio": stock["seal_to_float_ratio"],
             "seal_amount": stock["seal_amount"],
+            "seal_amount_rank": stock["seal_amount_rank"],
             "first_limit_time": stock["first_limit_time"],
             "missing_fields": missing,
             "basis": _candidate_basis(stock, missing),
+            "line": _candidate_line(stock, missing),
         }
     )
     return row
@@ -516,12 +560,77 @@ def _candidate_basis(stock: dict[str, Any], missing: list[str]) -> str:
     return f"{facts}；" + "；".join(notes)
 
 
+def _candidate_line(stock: dict[str, Any], missing: list[str]) -> str:
+    line = _stock_line(stock)
+    if not missing:
+        return line
+    notes: list[str] = []
+    cap = stock["stock_float_market_cap"]
+    null_fields = [
+        field
+        for field in missing
+        if not (field == "stock_float_market_cap" and cap == 0)
+    ]
+    if cap == 0 and "stock_float_market_cap" in missing:
+        notes.append("个股流通市值为 0")
+    if null_fields:
+        notes.append("数据缺失：" + "、".join(FIELD_LABELS[item] for item in null_fields))
+    return f"{line}；" + "；".join(notes)
+
+
+def _stock_line(
+    stock: dict[str, Any],
+    *,
+    tied: list[dict[str, Any]] | None = None,
+    tie_phrase: str | None = None,
+) -> str:
+    sectors = "、".join(stock["sectors"]) if stock["sectors"] else "无板块"
+    text = "，".join(
+        [
+            f"{stock['name']} `{stock['code']}`",
+            f"{stock['streak_height']}板",
+            sectors,
+            _format_price(stock["close_price"]),
+            _format_cap(stock["stock_float_market_cap"]),
+            _format_ranked("封成比", stock["seal_ratio"], stock["seal_ratio_rank"], _format_ratio),
+            _format_ranked("封单额", stock["seal_amount"], stock["seal_amount_rank"], _format_amount),
+        ]
+    )
+    if tied and tie_phrase:
+        others = "、".join(f"{item['name']} `{item['code']}`" for item in tied)
+        text += f"（与{others} {tie_phrase}）"
+    return text
+
+
 def _stock_ref(stock: dict[str, Any]) -> dict[str, Any]:
     return {"market": stock["market"], "code": stock["code"], "name": stock["name"]}
 
 
 def _or_missing(value: str | None) -> str:
     return value if value is not None else "缺失"
+
+
+def _format_price(value: float | None) -> str:
+    if value is None:
+        return "价格缺失"
+    return f"{value:.2f}元"
+
+
+def _format_cap(value: float | None) -> str:
+    if value is None:
+        return "流通市值缺失"
+    return f"流通市值{value / ONE_HUNDRED_MILLION:.2f}亿元"
+
+
+def _format_ranked(
+    label: str,
+    value: float | None,
+    rank: int | None,
+    formatter,
+) -> str:
+    if value is None or rank is None:
+        return f"{label}缺失"
+    return f"{label}{formatter(value)}（第{rank}）"
 
 
 def _format_ratio(value: float | None) -> str:
