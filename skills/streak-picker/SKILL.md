@@ -3,7 +3,7 @@ name: streak-picker
 description: "A股连板选股。用户要求从连板或每日梯队里筛选、排序、挑出候选、整理关注名单，或问强势板块、题材、总龙头、板块龙头、日内龙头、一排二排时使用。只读 daily-market-review 已保存的复盘结果。保存、补齐、修正或查看市场复盘时不使用本 skill。"
 metadata:
   author: stock-pilot
-  version: 0.4.0
+  version: 0.4.1
   category: finance
   tags:
     - a-share
@@ -117,12 +117,12 @@ python3 "<skill-dir>/scripts/cli.py" pick --input -
 
 ### 4. 一排 / 二排
 
-只从首板（`streak_height=1`）和二板（`streak_height=2`）里选。三板及以上不进这两排。各输出最多 3 只。价格和流通市值不是入选门槛。
+只从首板（`streak_height=1`）和二板（`streak_height=2`）里选。三板及以上不进这两排。各输出最多 3 只。
 
-判定字段为 `seal_ratio`、`seal_amount`、`stock_float_market_cap`、`first_limit_time`、`limit_rate_bp`。有一个为 `null`，或流通市值为 `0`，就进 `unclassified_rows`，不参与两排排序。`sectors` 为空不影响这两排。
+判定字段为 `close_price`、`stock_float_market_cap`、`limit_rate_bp`、`seal_ratio`、`seal_amount`、`first_limit_time`。有一个为 `null`，或流通市值为 `0`，就进 `unclassified_rows`，不参与两排排序。`sectors` 为空不影响这两排。
 
-- **一排**排序键：`limit_rate_bp = 1000`（10cm）的排在前面，然后二板优先于首板，然后用第 3 节的五键。10cm 是连板可能性，不是强弱标准。10cm 不足 3 只时，名额留给已经按这个顺序排好的 20cm、30cm。
-- **二排**：从没有进入一排的首板、二板里，只按第 3 节的五键再取最多 3 只。不再把 10cm 和二板提前。因此二排可以有非 10cm，也可以有没进一排的 10cm，并且不与一排重复。
+- **一排**必须同时满足三道门槛：收盘价严格 < 30 元、个股流通市值严格 < 100 亿、`limit_rate_bp = 1000`（10cm）。收盘价等于 30 元，或流通市值等于 100 亿，都不进一排。过了这三道之后再排序：二板优先于首板，然后用第 3 节的五键，取前 3。10cm 不足 3 只时名额留空，20cm、30cm 不补进一排。
+- **二排**：从没有进入一排的首板、二板里，只按第 3 节的五键再取最多 3 只。这里包括没过价格、市值或 10cm 的股票，也包括过了三道门槛但没有进入一排前 3 的 10cm。不与一排重复。二排只按封锁强度从剩余里取，不把「不满足一排」写成它的定义。
 
 首板和二板一只都进不了两排时，`status` 为 `unclassifiable_rows`，两排留空，用 `message` 说明实际缺失的字段和只数。至少有一只能进两排时，`status` 为 `ok`。候选池里没有首板或二板时，`status` 为 `no_row_candidates`。
 

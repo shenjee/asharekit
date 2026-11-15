@@ -10,6 +10,8 @@ import math
 from typing import Any
 
 ONE_HUNDRED_MILLION = 100_000_000
+ROW1_MAX_CLOSE_PRICE = 30
+ROW1_MAX_FLOAT_CAP = 100 * ONE_HUNDRED_MILLION
 ROW1_LIMIT_RATE_BP = 1000
 STRONG_SECTOR_LIMIT = 3
 ROW_DISPLAY_LIMIT = 3
@@ -26,18 +28,20 @@ MESSAGE_INTRADAY_UNDETERMINED = "数据缺失，无法判定"
 MESSAGE_NO_ROW_CANDIDATES = "候选池内没有首板或二板"
 
 ROW_FIELDS = (
+    "close_price",
+    "stock_float_market_cap",
+    "limit_rate_bp",
     "seal_ratio",
     "seal_amount",
-    "stock_float_market_cap",
     "first_limit_time",
-    "limit_rate_bp",
 )
 FIELD_LABELS = {
+    "close_price": "收盘价",
+    "stock_float_market_cap": "个股流通市值",
+    "limit_rate_bp": "涨停限幅",
     "seal_ratio": "封成比",
     "seal_amount": "封单额",
-    "stock_float_market_cap": "个股流通市值",
     "first_limit_time": "首次涨停时间",
-    "limit_rate_bp": "涨停限幅",
 }
 
 
@@ -65,7 +69,9 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
 
     strong = _strong_sectors(stocks)
     eligible, unclassified_all = _split_rows(stocks)
-    row1_stocks = sorted(eligible, key=_row1_sort_key)[:ROW_DISPLAY_LIMIT]
+    row1_stocks = sorted((item for item in eligible if _is_row1(item)), key=_row1_sort_key)[
+        :ROW_DISPLAY_LIMIT
+    ]
     chosen = {(item["market"], item["code"]) for item in row1_stocks}
     row2_stocks = sorted(
         (item for item in eligible if (item["market"], item["code"]) not in chosen),
@@ -390,18 +396,33 @@ def _split_rows(
 
 def _row_missing(stock: dict[str, Any]) -> list[str]:
     missing: list[str] = []
+    if stock["close_price"] is None:
+        missing.append("close_price")
+    cap = stock["stock_float_market_cap"]
+    if cap is None or cap == 0:
+        missing.append("stock_float_market_cap")
+    if stock["limit_rate_bp"] is None:
+        missing.append("limit_rate_bp")
     if stock["seal_ratio"] is None:
         missing.append("seal_ratio")
     if stock["seal_amount"] is None:
         missing.append("seal_amount")
-    cap = stock["stock_float_market_cap"]
-    if cap is None or cap == 0:
-        missing.append("stock_float_market_cap")
     if stock["first_limit_time"] is None:
         missing.append("first_limit_time")
-    if stock["limit_rate_bp"] is None:
-        missing.append("limit_rate_bp")
     return missing
+
+
+def _is_row1(stock: dict[str, Any]) -> bool:
+    """一排三道门槛同时成立：收盘价 < 30、流通市值 < 100 亿、10cm。"""
+    price = stock["close_price"]
+    cap = stock["stock_float_market_cap"]
+    return (
+        price is not None
+        and price < ROW1_MAX_CLOSE_PRICE
+        and cap is not None
+        and 0 < cap < ROW1_MAX_FLOAT_CAP
+        and stock["limit_rate_bp"] == ROW1_LIMIT_RATE_BP
+    )
 
 
 def _strength_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
@@ -421,11 +442,8 @@ def _strength_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _row1_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
-    return (
-        0 if stock["limit_rate_bp"] == ROW1_LIMIT_RATE_BP else 1,
-        -stock["streak_height"],
-        *_strength_sort_key(stock),
-    )
+    """过了价格、市值、10cm 之后：二板优先于首板，再按封锁强度五键。"""
+    return (-stock["streak_height"], *_strength_sort_key(stock))
 
 
 def _capped_unclassified(

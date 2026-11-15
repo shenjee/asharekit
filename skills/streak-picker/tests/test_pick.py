@@ -90,10 +90,12 @@ class MixedFixtureTest(unittest.TestCase):
         )
         self.assertTrue(all(item["market"] and item["code"] for item in result["leaders"]["sectors"]))
 
-        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "000001"])
-        self.assertEqual([item["code"] for item in result["row2"]], ["300001", "000010", "600099"])
-        self.assertEqual(result["row2"][0]["limit_rate_bp"], 2000)
-        self.assertEqual(result["row1"][2]["close_price"], 35)
+        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600004", "000010"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["000001", "300001", "600099"])
+        self.assertEqual(result["row1"][0]["limit_rate_bp"], 1000)
+        self.assertLess(result["row1"][0]["close_price"], 30)
+        self.assertEqual(result["row2"][0]["close_price"], 35)
+        self.assertEqual(result["row2"][1]["limit_rate_bp"], 2000)
         self.assertNotIn("row1_total", result)
         self.assertNotIn("row2_total", result)
         self.assertNotIn("unclassified_total", result)
@@ -297,18 +299,19 @@ class TieBreakTest(unittest.TestCase):
 
 
 class RowBoundaryTest(unittest.TestCase):
-    def test_price_and_cap_are_not_row_gates(self) -> None:
+    def test_row1_requires_price_below_30_cap_below_100_yi_and_10cm(self) -> None:
         result = pick(
             _data(
                 [
                     _stock(code="600001", name="30元", close_price=30, seal_ratio=0.1),
                     _stock(code="600002", name="100亿", close_price=10, stock_float_market_cap=10_000_000_000, seal_ratio=0.2),
+                    _stock(code="300001", name="20cm", market="sz", limit_rate_bp=2000, seal_ratio=0.9),
                     _stock(code="600003", name="小盘", close_price=10, stock_float_market_cap=2_000_000_000, seal_ratio=0.3),
                 ]
             )
         )
-        self.assertEqual([item["code"] for item in result["row1"]], ["600003", "600002", "600001"])
-        self.assertEqual(result["row2"], [])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600003"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["300001", "600002", "600001"])
 
     def test_null_seal_ratio_sorts_after_a_present_value(self) -> None:
         result = pick(
@@ -353,7 +356,7 @@ class MissingRowDataTest(unittest.TestCase):
         self.assertEqual(result["status"], "unclassifiable_rows")
         self.assertEqual(
             result["message"],
-            "首板和二板的个股流通市值未保存，共2只，无法分排",
+            "首板和二板的收盘价、个股流通市值未保存，共2只，无法分排",
         )
         self.assertEqual(result["row1"], [])
         self.assertEqual(result["row2"], [])
@@ -393,8 +396,8 @@ class MissingRowDataTest(unittest.TestCase):
         )
         self.assertEqual(result["status"], "ok")
         self.assertIsNone(result["message"])
-        self.assertEqual([item["code"] for item in result["row1"]], ["600001", "600002"])
-        self.assertEqual(result["row2"], [])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["600002"])
         self.assertEqual([item["code"] for item in result["unclassified_rows"]], ["600003"])
 
 
@@ -439,7 +442,7 @@ class RowDisplayLimitTest(unittest.TestCase):
 
 
 class StrengthOrderTest(unittest.TestCase):
-    def test_row1_puts_10cm_ahead_then_second_board(self) -> None:
+    def test_row1_keeps_only_10cm_and_puts_second_board_first(self) -> None:
         result = pick(
             _data(
                 [
@@ -449,9 +452,10 @@ class StrengthOrderTest(unittest.TestCase):
                 ]
             )
         )
-        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600001", "300001"])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600002", "600001"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["300001"])
 
-    def test_fewer_than_three_10cm_names_leave_room_for_other_limits(self) -> None:
+    def test_fewer_than_three_10cm_names_do_not_backfill_other_limits(self) -> None:
         result = pick(
             _data(
                 [
@@ -461,8 +465,8 @@ class StrengthOrderTest(unittest.TestCase):
                 ]
             )
         )
-        self.assertEqual([item["code"] for item in result["row1"]], ["600001", "300001", "300002"])
-        self.assertEqual(result["row2"], [])
+        self.assertEqual([item["code"] for item in result["row1"]], ["600001"])
+        self.assertEqual([item["code"] for item in result["row2"]], ["300001", "300002"])
 
     def test_row2_uses_strength_only_and_can_keep_a_10cm_name(self) -> None:
         stocks = [
@@ -503,10 +507,11 @@ class StrengthOrderTest(unittest.TestCase):
         self.assertAlmostEqual(result["row1"][0]["seal_to_float_ratio"], 0.005)
         self.assertEqual(result["row1"][0]["seal_ratio"], 0.2)
 
-    def test_missing_close_price_still_enters_a_row(self) -> None:
+    def test_missing_close_price_is_unclassified(self) -> None:
         result = pick(_data([_stock(close_price=None)]))
-        self.assertEqual([item["code"] for item in result["row1"]], ["600000"])
-        self.assertEqual(result["unclassified_rows"], [])
+        self.assertEqual(result["row1"], [])
+        self.assertEqual(result["row2"], [])
+        self.assertEqual(result["unclassified_rows"][0]["missing_fields"], ["close_price"])
 
 
 class CliTest(unittest.TestCase):
@@ -623,6 +628,8 @@ class SkillTextTest(unittest.TestCase):
             "seal_to_float_ratio",
             "不要写「共 N 只，取前 3」",
             "limit_rate_bp = 1000",
+            "收盘价严格 < 30 元",
+            "个股流通市值严格 < 100 亿",
         ):
             self.assertIn(phrase, text)
 
