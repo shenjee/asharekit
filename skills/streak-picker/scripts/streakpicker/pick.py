@@ -26,6 +26,7 @@ MESSAGE_NO_RECORD = "库内无记录"
 MESSAGE_NO_CLOSED_LIMIT_UP = "库内无收盘涨停事件"
 MESSAGE_INTRADAY_UNDETERMINED = "数据缺失，无法判定"
 MESSAGE_NO_ROW_CANDIDATES = "候选池内没有首板或二板"
+MESSAGE_NO_STRONG_SECTOR_ROWS = "强势板块内没有首板或二板"
 
 ROW_FIELDS = (
     "close_price",
@@ -69,8 +70,10 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
     _assign_ranks(stocks)
 
     strong = _strong_sectors(stocks)
-    eligible, unclassified_all = _split_rows(stocks)
-    row1_stocks = sorted((item for item in eligible if _is_row1(item)), key=_row1_sort_key)[
+    strong_themes = {item["theme"] for item in strong}
+    row_stocks = [item for item in stocks if _in_strong_sectors(item, strong_themes)]
+    eligible, unclassified_all = _split_rows(row_stocks)
+    row1_stocks = sorted((item for item in eligible if _is_row1(item)), key=_strength_sort_key)[
         :ROW_DISPLAY_LIMIT
     ]
     chosen = {(item["market"], item["code"]) for item in row1_stocks}
@@ -83,6 +86,9 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
     if not any(item["streak_height"] in (1, 2) for item in stocks):
         status = STATUS_NO_ROW_CANDIDATES
         message = MESSAGE_NO_ROW_CANDIDATES
+    elif not any(item["streak_height"] in (1, 2) for item in row_stocks):
+        status = STATUS_NO_ROW_CANDIDATES
+        message = MESSAGE_NO_STRONG_SECTOR_ROWS
     elif not eligible and unclassified_all:
         status = STATUS_UNCLASSIFIABLE_ROWS
         message = _unclassifiable_message(unclassified_all)
@@ -400,6 +406,11 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
+def _in_strong_sectors(stock: dict[str, Any], themes: set[str]) -> bool:
+    """板块原文与当日强势板块有交集才进入两排。空板块没有交集。"""
+    return any(sector in themes for sector in stock["sectors"])
+
+
 def _split_rows(
     stocks: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], list[str]]]]:
@@ -479,11 +490,6 @@ def _strength_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
         stock["market"],
         stock["code"],
     )
-
-
-def _row1_sort_key(stock: dict[str, Any]) -> tuple[Any, ...]:
-    """过了价格、市值、10cm 之后：二板优先于首板，再按封锁强度五键。"""
-    return (-stock["streak_height"], *_strength_sort_key(stock))
 
 
 def _capped_unclassified(
