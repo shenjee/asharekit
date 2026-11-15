@@ -621,7 +621,7 @@ class SkillTextTest(unittest.TestCase):
             "code",
             "数据缺失，无法判定",
             "seal_to_float_ratio",
-            "共 N 只，取前 3",
+            "不要写「共 N 只，取前 3」",
             "limit_rate_bp = 1000",
         ):
             self.assertIn(phrase, text)

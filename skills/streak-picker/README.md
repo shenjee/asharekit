@@ -41,7 +41,7 @@ python3 "<skill-dir>/../daily-market-review/scripts/cli.py" get --date 2026-08-2
 
 ## 读到的字段
 
-一排 / 二排和龙头排序使用 `get` 结果里的 `seal_amount`、`seal_ratio`、`first_limit_time`、`close_price`、`stock_float_market_cap`。这些值从哪来由复盘 skill 决定。本 skill 不区分 Supabase、SQLite 或其他后端。读到 `null` 就按数据缺失处理，不估算，也不改用其他来源补齐。
+一排 / 二排使用 `get` 结果里的 `seal_ratio`、`seal_amount`、`stock_float_market_cap`、`first_limit_time`、`limit_rate_bp`。龙头排序使用 `first_limit_time`、`seal_ratio`、`seal_amount`。`close_price` 不参与分排和排序。这些值从哪来由复盘 skill 决定。本 skill 不区分 Supabase、SQLite 或其他后端。读到 `null` 就按数据缺失处理，不估算，也不改用其他来源补齐。
 
 ## 安装
 
