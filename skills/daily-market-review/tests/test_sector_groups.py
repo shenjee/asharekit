@@ -61,6 +61,10 @@ EXPECTED_GROUPS = [
     (("东数西算(算力)",), {"华胜天成", "南威软件", "法狮龙", "维通利", "华孚时尚"}),
     (("风电",), {"兴业股份", "新能股份", "维通利", "国统股份", "日发精机"}),
     (("锂电池概念",), {"福龙马", "兴业股份", "岳阳兴长", "世龙实业"}),
+    (("智能家居",), {"日盈电子", "法狮龙", "皮阿诺"}),
+    (("物联网",), {"北纬科技", "南威软件", "皮阿诺"}),
+    (("预制菜",), {"天邦食品", "好当家", "广百股份"}),
+    (("光刻胶",), {"兴业股份", "兴欣新材"}),
 ]
 
 EXPECTED_SECTORS = {
@@ -98,9 +102,9 @@ EXPECTED_SECTORS = {
     "国统股份": ("风电",),
     "岳阳兴长": ("锂电池概念",),
     "世龙实业": ("锂电池概念",),
-    "兴欣新材": ("化学制品",),
-    "好当家": ("养殖业",),
-    "皮阿诺": ("家居用品",),
+    "兴欣新材": ("光刻胶",),
+    "好当家": ("预制菜",),
+    "皮阿诺": ("智能家居", "物联网"),
 }
 
 
@@ -161,13 +165,13 @@ class SectorRuleTest(unittest.TestCase):
         self.assertEqual([group.sectors for group in result.groups], [("手机游戏", "网络游戏")])
         self.assertEqual(result.sectors_by_stock[("sh", "600001")], ("手机游戏", "网络游戏"))
 
-    def test_pair_with_one_member_in_a_larger_group_is_dropped(self) -> None:
+    def test_pair_keeps_the_leftover_on_the_smaller_concept(self) -> None:
         boards = {
             "600001.SH": _board("600001.SH", "兴业", "化工", ("芯片概念", "光刻胶")),
             "600002.SH": _board("600002.SH", "甲", "设备", ("芯片概念",)),
             "600003.SH": _board("600003.SH", "乙", "设备", ("芯片概念",)),
             "600004.SH": _board("600004.SH", "丙", "设备", ("芯片概念",)),
-            "000001.SZ": _board("000001.SZ", "兴欣", "化学制品", ("光刻胶",)),
+            "000001.SZ": _board("000001.SZ", "兴欣", "化学制品", ("光刻胶", "净水概念", "碳中和")),
         }
         result = classify_limit_ups(
             [
@@ -179,10 +183,19 @@ class SectorRuleTest(unittest.TestCase):
             ],
             boards,
         )
-        self.assertEqual([group.sectors for group in result.groups], [("芯片概念",)])
-        self.assertEqual(result.sectors_by_stock[("sz", "000001")], ("化学制品",))
+        self.assertEqual([group.sectors for group in result.groups], [("芯片概念",), ("光刻胶",)])
+        self.assertEqual(result.sectors_by_stock[("sh", "600001")], ("芯片概念",))
+        self.assertEqual(result.sectors_by_stock[("sz", "000001")], ("光刻胶",))
 
-    def test_size_three_with_one_leftover_is_not_restored(self) -> None:
+    def test_solo_concepts_are_written_when_the_stock_has_no_larger_group(self) -> None:
+        boards = {
+            "000001.SZ": _board("000001.SZ", "兴欣", "化学制品", ("净水概念", "碳中和")),
+        }
+        result = classify_limit_ups([_stock("sz", "000001", "兴欣")], boards)
+        self.assertEqual([group.sectors for group in result.groups], [("净水概念",), ("碳中和",)])
+        self.assertEqual(result.sectors_by_stock[("sz", "000001")], ("净水概念", "碳中和"))
+
+    def test_size_three_keeps_the_leftover_on_the_smaller_concept(self) -> None:
         boards = {
             "600001.SH": _board("600001.SH", "天邦", "养殖业", ("机器人概念", "预制菜")),
             "600002.SH": _board("600002.SH", "甲", "设备", ("机器人概念",)),
@@ -201,8 +214,8 @@ class SectorRuleTest(unittest.TestCase):
             boards,
         )
         labels = [group.sectors for group in result.groups]
-        self.assertEqual(labels, [("IP经济(谷子经济)",), ("机器人概念",)])
-        self.assertEqual(result.sectors_by_stock[("sh", "600009")], ("养殖业",))
+        self.assertEqual(labels, [("IP经济(谷子经济)",), ("机器人概念",), ("预制菜",)])
+        self.assertEqual(result.sectors_by_stock[("sh", "600009")], ("预制菜",))
 
     def test_missing_code_is_reported_and_does_not_fail_the_group(self) -> None:
         boards = {

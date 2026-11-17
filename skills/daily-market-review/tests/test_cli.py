@@ -98,13 +98,28 @@ class TestCli(unittest.TestCase):
             self.assertEqual(payload["data"]["enrich"]["patch_count"], 1)
             self.assertTrue(payload["data"]["enrich"]["written"])
             self.assertNotIn("sectors", payload["data"]["enrich"]["filled"]["sh 603366 up"])
-            self.assertEqual(payload["data"]["sectors"]["assignments"][0]["sectors"], ["厨卫电器"])
+            solo_concepts = [
+                "PPP概念",
+                "储能",
+                "充电桩",
+                "光伏概念",
+                "净水概念",
+                "区块链",
+                "参股银行",
+                "建筑节能",
+                "智能家居",
+                "特斯拉概念",
+                "碳中和",
+                "空气能热泵",
+                "蚂蚁集团概念",
+            ]
+            self.assertEqual(payload["data"]["sectors"]["assignments"][0]["sectors"], solo_concepts)
 
             get_buffer = io.StringIO()
             with patch("sys.stdout", get_buffer):
                 rc = cli.main(["--backend", "sqlite", "--db", str(db_path), "get", "--date", "2026-08-21"])
             ladder = json.loads(get_buffer.getvalue())["data"]["ladder"]["groups"][0]["stocks"][0]
-            self.assertEqual(ladder["sectors"], ["厨卫电器"])
+            self.assertEqual(ladder["sectors"], solo_concepts)
             self.assertEqual(ladder["close_price"], 25.66)
 
     def test_save_events_writes_shared_concepts_and_skips_broken_boards(self) -> None:

@@ -25,11 +25,6 @@ BROAD_CONCEPTS = frozenset(
         "粤港澳大湾区",
     }
 )
-# 4 只及以上，有 1 只不在更大组里就保留（如 IP经济、东数西算）。
-# 不足 4 只时，至少要有 2 只不在更大组里才单列：
-# 2 只且其中一只已在更大组（光刻胶）不单列；
-# 3 只里只剩 1 只落单（预制菜、智能家居）也不再恢复来安置。
-_MIN_SIZE_FOR_ONE_EXCLUSIVE = 4
 _MARKET_SUFFIX = {"sh": "SH", "sz": "SZ", "bj": "BJ"}
 
 
@@ -120,52 +115,43 @@ def classify_limit_ups(
         for concept in item.concepts:
             members_by_concept.setdefault(concept, set()).add(key)
 
-    raw: dict[frozenset[tuple[str, str]], tuple[str, ...]] = {}
-    for keys in members_by_concept.values():
-        if len(keys) < 2:
-            continue
+    # 2 只及以上：相同成员集合并成一组，属性是全体概念的交集。
+    # 只有 1 只：每个概念单独成组，只写这一个概念，不把该股其余概念并进交集。
+    candidates: list[tuple[frozenset[tuple[str, str]], tuple[str, ...]]] = []
+    seen_multi: set[frozenset[tuple[str, str]]] = set()
+    for concept, keys in members_by_concept.items():
         member_set = frozenset(keys)
-        if member_set in raw:
+        if len(member_set) == 1:
+            candidates.append((member_set, (concept,)))
             continue
+        if member_set in seen_multi:
+            continue
+        seen_multi.add(member_set)
         intersection = frozenset.intersection(*(by_key[key].concepts for key in member_set))
-        raw[member_set] = tuple(sorted(intersection))
+        candidates.append((member_set, tuple(sorted(intersection))))
 
-    non_subsets = [
-        member_set
-        for member_set in raw
-        if not any(member_set < other for other in raw)
-    ]
-
-    def exclusive_count(member_set: frozenset[tuple[str, str]]) -> int:
-        count = 0
-        for key in member_set:
-            in_larger = any(key in other and len(other) > len(member_set) for other in non_subsets)
-            if not in_larger:
-                count += 1
-        return count
-
+    # 全部成员已被更大组覆盖的子集不单列。去掉这些成员后只剩 1 只的组仍保留。
     kept = [
-        member_set
-        for member_set in non_subsets
-        if (exclusive := exclusive_count(member_set)) >= 2
-        or (exclusive >= 1 and len(member_set) >= _MIN_SIZE_FOR_ONE_EXCLUSIVE)
+        candidate
+        for candidate in candidates
+        if not any(candidate[0] < other[0] for other in candidates)
     ]
 
     sectors_by_stock: dict[tuple[str, str], tuple[str, ...]] = {}
     for item in resolved:
         key = (item.stock.market, item.stock.code)
-        containing = [member_set for member_set in kept if key in member_set]
+        containing = [candidate for candidate in kept if key in candidate[0]]
         if not containing:
             sectors_by_stock[key] = (item.industry_l2,) if item.industry_l2 else ()
             continue
-        max_size = max(len(member_set) for member_set in containing)
+        max_size = max(len(candidate[0]) for candidate in containing)
         chosen = sorted(
-            (member_set for member_set in containing if len(member_set) == max_size),
-            key=lambda member_set: raw[member_set],
+            (candidate for candidate in containing if len(candidate[0]) == max_size),
+            key=lambda candidate: candidate[1],
         )
         labels: list[str] = []
-        for member_set in chosen:
-            for label in raw[member_set]:
+        for _member_set, sectors in chosen:
+            for label in sectors:
                 if label not in labels:
                     labels.append(label)
         sectors_by_stock[key] = tuple(labels)
@@ -174,10 +160,10 @@ def classify_limit_ups(
         sectors_by_stock[(stock.market, stock.code)] = ()
 
     groups: list[SectorGroup] = []
-    for member_set in kept:
+    for member_set, sectors in kept:
         is_max_for_someone = False
         for key in member_set:
-            member_max = max(len(other) for other in kept if key in other)
+            member_max = max(len(other[0]) for other in kept if key in other[0])
             if member_max == len(member_set):
                 is_max_for_someone = True
                 break
@@ -187,7 +173,7 @@ def classify_limit_ups(
             by_key[key].stock
             for key in sorted(member_set, key=lambda item: (item[0], item[1]))
         )
-        groups.append(SectorGroup(sectors=raw[member_set], members=members))
+        groups.append(SectorGroup(sectors=sectors, members=members))
     groups.sort(key=lambda group: (-group.size, group.sectors))
 
     return SectorClassification(
