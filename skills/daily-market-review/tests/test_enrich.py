@@ -157,28 +157,28 @@ class FetchPoolTest(unittest.TestCase):
 
 
 class BuildPatchesTest(unittest.TestCase):
-    def test_fills_only_missing_fields_and_sectors(self) -> None:
+    def test_fills_only_missing_fields_and_not_sectors(self) -> None:
         events = [_event()]
         details = [_detail(seal_amount=999.0, sectors=["人工板块"])]
         patches, report = build_enrich_patches(events, details, [_stock()], [])
         self.assertEqual(len(patches), 1)
         patch = patches[0]
         self.assertNotIn("seal_amount", patch)  # 人工值不覆盖
-        self.assertNotIn("sectors", patch)  # 人工板块不覆盖
+        self.assertNotIn("sectors", patch)  # 所属板块不来自东财
         self.assertEqual(patch["close_price"], 25.66)
         self.assertEqual(patch["first_limit_time"], "09:30:18")
         self.assertEqual(patch["stock_float_market_cap"], 4943043301.08)
         self.assertEqual(patch["turnover_amount"], 38862070.0)
         self.assertEqual(report["matched"], 1)
 
-    def test_fills_sectors_when_empty(self) -> None:
+    def test_does_not_fill_sectors_from_eastmoney(self) -> None:
         patches, _report = build_enrich_patches([_event()], [_detail()], [_stock()], [])
-        self.assertEqual(patches[0]["sectors"], ["厨卫电器"])
+        self.assertNotIn("sectors", patches[0])
 
     def test_no_detail_row_still_fills(self) -> None:
         patches, _report = build_enrich_patches([_event()], [], [_stock()], [])
         self.assertIn("seal_amount", patches[0])
-        self.assertEqual(patches[0]["sectors"], ["厨卫电器"])
+        self.assertNotIn("sectors", patches[0])
 
     def test_broken_event_uses_zb_pool(self) -> None:
         broken = _event(closed_at_limit=False, streak_height=0)

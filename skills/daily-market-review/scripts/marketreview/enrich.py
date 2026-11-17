@@ -1,8 +1,9 @@
-"""用东方财富涨停/炸板股池补齐涨停事件明细与 sectors。
+"""用东方财富涨停/炸板股池补齐涨停事件明细。
 
 口径：
-- 只补缺，不覆盖：明细字段当前为 None、sectors 当前为空时才写入（人工优先）；
+- 只补缺，不覆盖：明细字段当前为 None 时才写入；
 - 只处理 direction=up：收盘涨停对涨停池，炸板对炸板池，按 6 位代码匹配；跌停不参与补缺，也不进未匹配；
+- 不写 sectors：所属板块由板块字典计算，不再写入东财 hybk；
 - 不写 limit_up_reasons（东财池没有该字段，原因文字维持人工喂入）；
 - 连板数对账只报告、不改账。
 """
@@ -74,11 +75,6 @@ def build_enrich_patches(
             if current is None and incoming is not None:
                 patch[field] = incoming
                 fields.append(field)
-        current_sectors = detail.sectors if detail is not None else []
-        if not current_sectors and stock.industry:
-            patch["sectors"] = [stock.industry]
-            fields.append("sectors")
-
         if fields:
             patches.append(patch)
             filled[identity] = fields

@@ -113,7 +113,7 @@ def cmd_save_events(args: argparse.Namespace) -> int:
     if not events:
         _success({"trade_date": trade_date, "saved_count": 0})
         return 0
-    # 事件已提交。补缺失败只报告，不回滚。
+    # 事件已提交。东财补缺失败只报告，不回滚。板块结论不依赖东财。
     try:
         from marketreview.sources.eastmoney import EastMoneyLimitPoolClient, EastMoneyPoolError
 
@@ -127,6 +127,7 @@ def cmd_save_events(args: argparse.Namespace) -> int:
                 "trade_date": trade_date,
                 "saved_count": len(events),
                 "events_saved": True,
+                "sectors": _write_limit_up_sectors(args, trade_date),
             },
         )
         return 1
@@ -138,7 +139,14 @@ def cmd_save_events(args: argparse.Namespace) -> int:
         state_dir=getattr(args, "state_dir", None),
     ) as repo:
         report = enrich_events(repo, trade_date, zt_pool=zt_pool, zb_pool=zb_pool)
-    _success({"trade_date": trade_date, "saved_count": len(events), "enrich": report})
+    _success(
+        {
+            "trade_date": trade_date,
+            "saved_count": len(events),
+            "enrich": report,
+            "sectors": _write_limit_up_sectors(args, trade_date),
+        }
+    )
     return 0
 
 
@@ -165,6 +173,24 @@ def cmd_save_event_details(args: argparse.Namespace) -> int:
     ) as repo:
         repo.save_price_limit_event_details(trade_date, details)
     _success({"trade_date": trade_date, "saved_count": len(details)})
+    return 0
+
+
+def _write_limit_up_sectors(args: argparse.Namespace, trade_date: str, *, dry_run: bool = False) -> dict:
+    from marketreview.sector_groups import apply_saved_limit_up_sectors
+
+    with open_repository(
+        backend=args.backend,
+        db_path=args.db,
+        state_dir=getattr(args, "state_dir", None),
+    ) as repo:
+        return apply_saved_limit_up_sectors(repo, trade_date, dry_run=dry_run)
+
+
+def cmd_classify_sectors(args: argparse.Namespace) -> int:
+    guard = default_write_guard()
+    trade_date = guard.validate_write_trade_date(args.date)
+    _success(_write_limit_up_sectors(args, trade_date, dry_run=args.dry_run))
     return 0
 
 
@@ -368,9 +394,17 @@ def build_parser() -> argparse.ArgumentParser:
     save_event_details_parser.add_argument("--input", default="-")
     save_event_details_parser.set_defaults(func=cmd_save_event_details)
 
+    classify_sectors_parser = subparsers.add_parser(
+        "classify-sectors",
+        help="按板块字典计算当日收盘涨停的所属板块，并写回 sectors",
+    )
+    classify_sectors_parser.add_argument("--date", required=True)
+    classify_sectors_parser.add_argument("--dry-run", action="store_true", help="只出分组结果，不写库")
+    classify_sectors_parser.set_defaults(func=cmd_classify_sectors)
+
     enrich_events_parser = subparsers.add_parser(
         "enrich-events",
-        help="用东方财富涨停/炸板股池补齐当日事件明细与 sectors（只补缺，不覆盖人工值）",
+        help="用东方财富涨停/炸板股池补齐当日事件明细（只补缺，不写 sectors）",
     )
     enrich_events_parser.add_argument("--date", required=True)
     enrich_events_parser.add_argument("--dry-run", action="store_true", help="只生成补缺报告，不写库")
