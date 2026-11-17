@@ -229,7 +229,7 @@ get 回读；各类分别报告采集结果与保存结果
 
 ### 涨停强度明细
 
-`save-events` 落库成功后自动从东方财富涨停/炸板股池补齐范围内 `direction=up` 事件的 `seal_amount`、`first_limit_time`、`close_price`、`stock_float_market_cap`、`turnover_amount` 和 `sectors`（只补缺，不覆盖已有值；跌停不参与）。这一步包含在 `save-events` 里，不要再跑第二条命令。拉源失败时事件已落库，命令返回 `SOURCE_UNAVAILABLE`，不要重跑 `save-events`；历史日期和只要报告不写库时用 `enrich-events`（`--dry-run`）。东财没给到、或要改成人工值时才 `save-event-details`。写入口径：
+`save-events` 落库成功后自动从东方财富涨停/炸板股池补齐范围内 `direction=up` 事件的 `seal_amount`、`first_limit_time`、`close_price`、`stock_float_market_cap`、`turnover_amount`（只补缺，不覆盖已有值；跌停不参与）。这一步包含在 `save-events` 里。拉源失败时事件已落库，命令返回 `SOURCE_UNAVAILABLE`，不要重跑 `save-events`；历史日期和只要报告不写库时用 `enrich-events`（`--dry-run`）。东财没给到、或要改成人工值时才 `save-event-details`。东财行业标签不写入 `sectors`。写入口径：
 
 | 字段 | 写入口径 |
 | --- | --- |
@@ -242,6 +242,16 @@ get 回读；各类分别报告采集结果与保存结果
 确认不到的字段不写。新记录保持 `null`，已有值保持原值。不得用 `0`、空字符串或推算值占位。跌停事件不写 `first_limit_time`。
 
 这四项随 `save-events` 自动补缺，不必另采。`seal_ratio` 由封单额和成交额在读取时计算，不采集、不写入。点名只改一条事件或一个其他字段时，不把这四项扩大成全市场补采。
+
+### 收盘涨停所属板块
+
+`sectors` 是当天这批收盘涨停的板块结论，不是字典原文，也不是东财行业标签。`save-events` 在事件落库后按当日已保存的收盘涨停计算并写回。炸板、跌停不参与。历史日期，或只要结果不写库，用 `classify-sectors`（`--dry-run`）。
+
+1. 按代码查 `assets/stock_boards.csv`，只取所属概念。先去掉宽标：融资融券、沪股通、深股通、国企改革、央企国企改革、华为概念、专精特新、创投、乡村振兴、粤港澳大湾区。再去掉与该股自身同花顺一级、二级或三级行业完全一致的词。
+2. 每个剩余概念把含有它的收盘涨停收成一组，至少 2 只。组可以重叠。组内概念求交，交集里的词全部作为这组的板块属性。
+3. 一组的成员若已被更大组完全覆盖，这组不单列。不足 4 只、且其中不在任何更大组里的股票少于 2 只，这组也不单列。不为落单的股票再恢复更小的组。
+4. 一只股票落在多组时，只保留人数最多的那组。人数并列，这些组都写入 `sectors`，按标签的 Unicode 码位排序。没有进入任何组的，写入该股同花顺二级行业。
+5. 字典里没有的代码：该只 `sectors` 留空，结果里的 `missing` 列出这些个股。其他股票照常分组。
 
 ### 禁止的结束方式
 

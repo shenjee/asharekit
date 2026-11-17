@@ -61,7 +61,7 @@ class TestCli(unittest.TestCase):
             market="sh",
             code="603366",
             name="日出东方",
-            industry="厨卫电器",
+            industry="别的行业",
             close_price=25.66,
             seal_amount=170182252.0,
             first_limit_time="09:30:18",
@@ -97,6 +97,8 @@ class TestCli(unittest.TestCase):
             self.assertEqual(payload["data"]["saved_count"], 1)
             self.assertEqual(payload["data"]["enrich"]["patch_count"], 1)
             self.assertTrue(payload["data"]["enrich"]["written"])
+            self.assertNotIn("sectors", payload["data"]["enrich"]["filled"]["sh 603366 up"])
+            self.assertEqual(payload["data"]["sectors"]["assignments"][0]["sectors"], ["厨卫电器"])
 
             get_buffer = io.StringIO()
             with patch("sys.stdout", get_buffer):
@@ -104,6 +106,78 @@ class TestCli(unittest.TestCase):
             ladder = json.loads(get_buffer.getvalue())["data"]["ladder"]["groups"][0]["stocks"][0]
             self.assertEqual(ladder["sectors"], ["厨卫电器"])
             self.assertEqual(ladder["close_price"], 25.66)
+
+    def test_save_events_writes_shared_concepts_and_skips_broken_boards(self) -> None:
+        events = [
+            {
+                "market": "sz",
+                "code": "002905",
+                "name": "金逸影视",
+                "direction": "up",
+                "closed_at_limit": True,
+                "limit_rate_bp": 1000,
+                "streak_height": 1,
+            },
+            {
+                "market": "sh",
+                "code": "603103",
+                "name": "横店影视",
+                "direction": "up",
+                "closed_at_limit": True,
+                "limit_rate_bp": 1000,
+                "streak_height": 2,
+            },
+            {
+                "market": "sz",
+                "code": "002425",
+                "name": "凯撒文化",
+                "direction": "up",
+                "closed_at_limit": False,
+                "limit_rate_bp": 1000,
+                "streak_height": 0,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "market_review.sqlite3"
+            buffer = io.StringIO()
+            with patch("sys.stdin", io.StringIO(json.dumps({"events": events}))):
+                with patch("sys.stdout", buffer):
+                    rc = cli.main(
+                        [
+                            "--backend",
+                            "sqlite",
+                            "--db",
+                            str(db_path),
+                            "save-events",
+                            "--date",
+                            "2026-08-21",
+                            "--input",
+                            "-",
+                        ]
+                    )
+            self.assertEqual(rc, 0)
+            payload = json.loads(buffer.getvalue())
+            by_code = {item["code"]: item["sectors"] for item in payload["data"]["sectors"]["assignments"]}
+            self.assertEqual(by_code["002905"], ["文化传媒概念", "虚拟现实"])
+            self.assertEqual(by_code["603103"], ["文化传媒概念", "虚拟现实"])
+            self.assertNotIn("002425", by_code)
+
+            dry = io.StringIO()
+            with patch("sys.stdout", dry):
+                rc = cli.main(
+                    [
+                        "--backend",
+                        "sqlite",
+                        "--db",
+                        str(db_path),
+                        "classify-sectors",
+                        "--date",
+                        "2026-08-21",
+                        "--dry-run",
+                    ]
+                )
+            self.assertEqual(rc, 0)
+            self.assertFalse(json.loads(dry.getvalue())["data"]["written"])
 
     def test_save_events_keeps_events_when_eastmoney_is_unavailable(self) -> None:
         from marketreview.sources.eastmoney import EastMoneyPoolError

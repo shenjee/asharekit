@@ -3,7 +3,7 @@ name: daily-market-review
 description: "每日资本市场总体复盘。整理、补充、修正和查看指定交易日的涨跌停、市场宽度、连板高度、每日梯队、两融、指数、成交额、市值与估值数据。用户提到市场复盘、总体复盘、涨跌停名单、连板高度、每日梯队、两融，或要求从图片、链接、网站、截图或自然语言提取并保存时使用。连板选股、筛选候选和关注名单不在本 skill。"
 metadata:
   author: stock-pilot
-  version: 0.6.0
+  version: 0.7.0
   category: finance
   tags:
     - a-share
@@ -48,6 +48,7 @@ python3 "<skill-dir>/scripts/cli.py" get --date 2026-08-21
 python3 "<skill-dir>/scripts/cli.py" save-review --date 2026-08-21 --input -
 python3 "<skill-dir>/scripts/cli.py" save-events --date 2026-08-21 --input -
 python3 "<skill-dir>/scripts/cli.py" save-event-details --date 2026-08-21 --input -
+python3 "<skill-dir>/scripts/cli.py" classify-sectors --date 2026-08-21
 python3 "<skill-dir>/scripts/cli.py" enrich-events --date 2026-08-21
 python3 "<skill-dir>/scripts/cli.py" delete-event --date 2026-08-21 --market sh --code 600519 --direction up
 python3 "<skill-dir>/scripts/cli.py" replace-direction --date 2026-08-21 --market sh --code 600519 --old-direction up --input -
@@ -138,7 +139,8 @@ CLI 输出统一为：
 - **涨跌停**：存个股事件，不存汇总数；完整复盘走四类采集，点名子类不扩范围（见行为说明）；写入前确定可信 `streak_height`；ST 过滤是义务不是停采条件
 - 完成业务校验后调用 CLI 写入
 - 事件扩展只能关联已保存的涨跌停事件；`limit_up_reasons` 只允许 `direction=up`
-- **`save-events` 落库后自动补缺**，不需要再跑第二条命令：用东方财富涨停/炸板股池补齐当日向上事件（收盘涨停、炸板）的封单额、首次涨停时间、收盘价、个股流通市值、成交额和板块（`sectors`，东财行业标签 hybk）。只补缺、不覆盖已有人工值；跌停不参与补缺和对账；连板数对账不一致只报告、不改账。东财池没有涨停原因字段，不写 `limit_up_reasons`（原因文字维持人工喂入）。拉源失败报 `SOURCE_UNAVAILABLE`，已经写下的事件不回滚。`enrich-events` 只用于历史回填和 `--dry-run`（只出报告不写库）
+- **`save-events` 落库后自动补缺**，不需要再跑第二条命令：用东方财富涨停/炸板股池补齐当日向上事件（收盘涨停、炸板）的封单额、首次涨停时间、收盘价、个股流通市值和成交额。只补缺、不覆盖已有值；跌停不参与补缺和对账；连板数对账不一致只报告、不改账。东财池没有涨停原因字段，不写 `limit_up_reasons`。东财行业标签不再写入 `sectors`。拉源失败报 `SOURCE_UNAVAILABLE`，已经写下的事件不回滚。`enrich-events` 只用于这些明细的历史回填和 `--dry-run`
+- **所属板块在同一次 `save-events` 里写回**：只对当日已保存的收盘涨停，用 `assets/stock_boards.csv` 按概念圈组、求交后写入 `sectors`。炸板、跌停不参与。没进组的写入该股同花顺二级行业；字典没有的代码留空，并在结果 `missing` 里列出。历史日期或只看不写时用 `classify-sectors`（`--dry-run`）。口径见 `references/Skill行为说明.md`
 - 三只指数（上证、深证成指、创业板指）可通过内置腾讯日 K 自动补齐
 - 首轮交付：对照请求范围报告已确认项；涨跌停须按适用类分别报告**采集结果与保存结果**；**仅当存在未完成项、写入失败或提交结果未知时**列出未完成项并明确「未完成」；范围内均已核验写入成功时可报告该范围已完成
 
