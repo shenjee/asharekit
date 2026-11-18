@@ -1,0 +1,167 @@
+{
+  "trade_date": "2026-11-17",
+  "review": {"turnover_amount_sh": 1},
+  "events": [{"code": "placeholder"}],
+  "summary": {},
+  "missing_fields": [],
+  "ladder": {
+    "groups": [
+      {
+        "streak_height": 3,
+        "count": 1,
+        "stocks": [
+          {
+            "market": "sz",
+            "code": "002685",
+            "name": "华东重机",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 3,
+            "sectors": ["芯片概念"],
+            "first_limit_time": "09:25:00",
+            "seal_ratio": 0.8,
+            "seal_amount": 80000000,
+            "close_price": 6.7,
+            "stock_float_market_cap": 6700000000
+          }
+        ]
+      },
+      {
+        "streak_height": 2,
+        "count": 3,
+        "stocks": [
+          {
+            "market": "sz",
+            "code": "000521",
+            "name": "长虹美菱",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 2,
+            "sectors": ["人工智能"],
+            "first_limit_time": "09:32:00",
+            "seal_ratio": 0.43,
+            "seal_amount": 43000000,
+            "close_price": 4.74,
+            "stock_float_market_cap": 4100000000
+          },
+          {
+            "market": "sz",
+            "code": "002861",
+            "name": "瀛通通讯",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 2,
+            "sectors": ["人工智能"],
+            "first_limit_time": "11:00:00",
+            "seal_ratio": 0.09,
+            "seal_amount": 9000000,
+            "close_price": 14.96,
+            "stock_float_market_cap": 2100000000
+          },
+          {
+            "market": "sz",
+            "code": "000533",
+            "name": "顺钠股份",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 2,
+            "sectors": ["储能"],
+            "first_limit_time": "10:30:00",
+            "seal_ratio": 0.01,
+            "seal_amount": 1000000,
+            "close_price": 10.8,
+            "stock_float_market_cap": 7400000000
+          }
+        ]
+      },
+      {
+        "streak_height": 1,
+        "count": 5,
+        "stocks": [
+          {
+            "market": "sz",
+            "code": "002451",
+            "name": "摩恩电气",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 1,
+            "sectors": ["储能"],
+            "first_limit_time": "09:25:00",
+            "seal_ratio": 0.5,
+            "seal_amount": 50000000,
+            "close_price": 7.13,
+            "stock_float_market_cap": 3100000000
+          },
+          {
+            "market": "sh",
+            "code": "603324",
+            "name": "盛剑科技",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 1,
+            "sectors": ["芯片概念"],
+            "first_limit_time": "09:40:00",
+            "seal_ratio": 0.9,
+            "seal_amount": 90000000,
+            "close_price": 20.82,
+            "stock_float_market_cap": 3000000000
+          },
+          {
+            "market": "sz",
+            "code": "002855",
+            "name": "捷荣技术",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 1,
+            "sectors": ["储能"],
+            "first_limit_time": "09:50:00",
+            "seal_ratio": 0.45,
+            "seal_amount": 45000000,
+            "close_price": 11.29,
+            "stock_float_market_cap": 2800000000
+          },
+          {
+            "market": "sz",
+            "code": "002771",
+            "name": "真视通",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 1,
+            "sectors": ["人工智能"],
+            "first_limit_time": "10:10:00",
+            "seal_ratio": 0.4,
+            "seal_amount": 40000000,
+            "close_price": 11.88,
+            "stock_float_market_cap": 2100000000
+          },
+          {
+            "market": "sh",
+            "code": "600770",
+            "name": "综艺股份",
+            "direction": "up",
+            "closed_at_limit": true,
+            "limit_rate_bp": 1000,
+            "streak_height": 1,
+            "sectors": ["芯片概念"],
+            "first_limit_time": "10:00:00",
+            "seal_ratio": 0.005,
+            "seal_amount": 500000,
+            "close_price": 5.53,
+            "stock_float_market_cap": 7200000000
+          }
+        ]
+      }
+    ],
+    "broken_limit_up": [],
+    "opened_limit_down": [],
+    "closed_limit_down": []
+  }
+}

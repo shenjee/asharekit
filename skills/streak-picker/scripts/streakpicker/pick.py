@@ -73,14 +73,7 @@ def pick(data: dict[str, Any]) -> dict[str, Any]:
     strong_themes = {item["theme"] for item in strong}
     row_stocks = [item for item in stocks if _in_strong_sectors(item, strong_themes)]
     eligible, unclassified_all = _split_rows(row_stocks)
-    row1_stocks = sorted((item for item in eligible if _is_row1(item)), key=_strength_sort_key)[
-        :ROW_DISPLAY_LIMIT
-    ]
-    chosen = {(item["market"], item["code"]) for item in row1_stocks}
-    row2_stocks = sorted(
-        (item for item in eligible if (item["market"], item["code"]) not in chosen),
-        key=_strength_sort_key,
-    )[:ROW_DISPLAY_LIMIT]
+    row1_stocks, row2_stocks = _fill_rows(eligible, _named_leader_ids(stocks, strong))
     status = STATUS_OK
     message = None
     if not any(item["streak_height"] in (1, 2) for item in stocks):
@@ -370,9 +363,67 @@ def _leader_basis(
     return "，".join(parts)
 
 
-def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
+def _identity(stock: dict[str, Any]) -> tuple[str, str]:
+    return (stock["market"], stock["code"])
+
+
+def _named_leader_ids(
+    stocks: list[dict[str, Any]],
+    strong: list[dict[str, Any]],
+) -> set[tuple[str, str]]:
+    """已经点名的总龙头、板块龙头、日内龙头。同一只股票只保留一个身份。"""
+    market, _tied = _select_leader(stocks)
+    ids = {_identity(market)}
+    for item in strong:
+        sector, _tied = _select_leader(item["stocks"])
+        ids.add(_identity(sector))
+        intraday = _intraday_winner(item["stocks"])
+        if intraday is not None:
+            ids.add(_identity(intraday[0]))
+    return ids
+
+
+def _intraday_winner(
+    stocks: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
     timed = [item for item in stocks if item["first_limit_time"] is not None]
     if not timed:
+        return None
+    ordered = sorted(timed, key=_leader_sort_key)
+    winner = ordered[0]
+    tied = [item for item in ordered[1:] if item["first_limit_time"] == winner["first_limit_time"]]
+    return winner, tied
+
+
+def _fill_rows(
+    eligible: list[dict[str, Any]],
+    leader_ids: set[tuple[str, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """龙头先占一排、再到二排前面。每一段内部按封锁强度五键，段与段不再混排。"""
+    leaders = [item for item in eligible if _identity(item) in leader_ids]
+    others = [item for item in eligible if _identity(item) not in leader_ids]
+    row1_leaders = sorted((item for item in leaders if _is_row1(item)), key=_strength_sort_key)[
+        :ROW_DISPLAY_LIMIT
+    ]
+    row1_fillers = sorted((item for item in others if _is_row1(item)), key=_strength_sort_key)[
+        : ROW_DISPLAY_LIMIT - len(row1_leaders)
+    ]
+    row1 = row1_leaders + row1_fillers
+    chosen = {_identity(item) for item in row1}
+    row2_leaders = sorted(
+        (item for item in leaders if _identity(item) not in chosen),
+        key=_strength_sort_key,
+    )[:ROW_DISPLAY_LIMIT]
+    row2_fillers = sorted(
+        (item for item in others if _identity(item) not in chosen),
+        key=_strength_sort_key,
+    )[: ROW_DISPLAY_LIMIT - len(row2_leaders)]
+    return row1, row2_leaders + row2_fillers
+
+
+def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
+    picked = _intraday_winner(stocks)
+    if picked is None:
         return {
             "role": "日内龙头",
             "theme": theme,
@@ -393,9 +444,7 @@ def _intraday_row(theme: str, stocks: list[dict[str, Any]]) -> dict[str, Any]:
             "basis": MESSAGE_INTRADAY_UNDETERMINED,
             "line": None,
         }
-    ordered = sorted(timed, key=_leader_sort_key)
-    winner = ordered[0]
-    tied = [item for item in ordered[1:] if item["first_limit_time"] == winner["first_limit_time"]]
+    winner, tied = picked
     return _leader_row(
         "日内龙头",
         theme,
